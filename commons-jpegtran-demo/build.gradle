@@ -3,53 +3,35 @@ plugins {
 }
 
 android {
-    namespace 'github.kamemak.ajpegtran_example'
+    namespace 'fr.free.nrw.commons.commons_jpegtran_demo'
     compileSdk 34
 
     defaultConfig {
-        applicationId "github.kamemak.ajpegtran_example"
-        minSdk 21
+        applicationId "fr.free.nrw.commons.commons_jpegtran_demo"
+        minSdk 26
         targetSdk 34
         versionCode 1
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        ndk {
-            // Specifies the ABI configurations of your native
-            // libraries Gradle should build and package with your APK.
-            abiFilters 'x86', 'armeabi-v7a','arm64-v8a','x86_64'
-        }
     }
 
     buildTypes {
         release {
-            minifyEnabled true
+            minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            externalNativeBuild {
-                ndkBuild {
-                    // Argument for release native build
-                    //arguments 'LOCAL_CFLAGS+=-O2'
-                }
-            }
         }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
-    externalNativeBuild {
-        ndkBuild {
-            path "src/main/cpp/Android.mk"
-        }
-    }
-    ndkVersion '21.4.7075529'
-    buildToolsVersion '34.0.0'
 }
 
 dependencies {
-
     implementation 'androidx.appcompat:appcompat:1.3.0'
     implementation 'com.google.android.material:material:1.4.0'
+    implementation files('../jpegtran/build/outputs/aar/jpegtran-release.aar')
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.3'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.4.0'
