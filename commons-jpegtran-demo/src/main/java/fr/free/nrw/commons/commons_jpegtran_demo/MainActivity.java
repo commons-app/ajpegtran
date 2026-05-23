@@ -151,11 +151,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                 // Call ajpegtranhead to get JPEG properties.
                                 String jniresult;   // If success, "OK" is returned. If fail, error message is returned to here.
                                 int[] retarray = new int[10];   // JPEG properties are returned to here.
-                                try {
-                                    ParcelFileDescriptor parcelFd = getContentResolver().openFileDescriptor(lloadUri, "r");
-                                    // To simplify the sample code, call ajpegtranhead() from GUI thread directly.
-                                    // When you implement your app, you should make thread and call ajpegtran() from the thread.
-                                    jniresult = AJpegTran.ajpegtranhead(parcelFd.detachFd(), retarray);
+                                try (ParcelFileDescriptor parcelFd =
+                                             getContentResolver().openFileDescriptor(lloadUri, "r")) {
+                                    int detachedFd = -1;
+                                    try {
+                                        detachedFd = parcelFd.detachFd();
+                                        // To simplify the sample code, call ajpegtranhead() from GUI thread directly.
+                                        // When you implement your app, you should make thread and call ajpegtran() from the thread.
+                                        jniresult = AJpegTran.ajpegtranhead(detachedFd, retarray);
+                                    } finally {
+                                        if (detachedFd != -1) {
+                                            ParcelFileDescriptor.adoptFd(detachedFd).close();
+                                        }
+                                    }
                                 } catch (IOException | SecurityException e) {
                                     jniresult = getString(R.string.mess_error_readfile);
                                 }
