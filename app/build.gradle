@@ -3,6 +3,7 @@ plugins {
 }
 
 android {
+    namespace 'github.kamemak.ajpegtran_example'
     compileSdk 31
 
     defaultConfig {
@@ -42,7 +43,7 @@ android {
         }
     }
     ndkVersion '21.4.7075529'
-    buildToolsVersion '31.0.0'
+    buildToolsVersion '34.0.0'
 }
 
 dependencies {
