@@ -4,10 +4,10 @@ plugins {
 
 android {
     namespace 'fr.free.nrw.commons.jpegtran'
-    compileSdk 31
+    compileSdk 35
 
     defaultConfig {
-        minSdk 21
+        minSdk 26
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
@@ -23,6 +23,13 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
+    externalNativeBuild {
+        ndkBuild {
+            path "src/main/cpp/Android.mk"
+        }
+    }
+    ndkVersion '29.0.13599879'
+
 }
 
 dependencies {
