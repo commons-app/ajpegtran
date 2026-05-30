@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "ajpegtran_example"
 include ':app'
 include ':jpegtran'
+include ':commons-jpegtran-demo'
