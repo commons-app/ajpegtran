@@ -279,7 +279,7 @@ do_flatten (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
  *  This fucntion clear AC coefficients only, whereas do_wipe() clear all coefficient.
  */
 LOCAL(void)
-do_pixelize (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
+do_pixelize (j_decompress_ptr srcinfo,
 	 JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
 	 jvirt_barray_ptr *src_coef_arrays,
 	 JDIMENSION drop_width, JDIMENSION drop_height)
@@ -291,8 +291,8 @@ do_pixelize (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
   JBLOCKARRAY buffer;
   jpeg_component_info *compptr;
 
-  for (ci = 0; ci < dstinfo->num_components; ci++) {
-    compptr = dstinfo->comp_info + ci;
+  for (ci = 0; ci < srcinfo->num_components; ci++) {
+    compptr = srcinfo->comp_info + ci;
     x_wipe_blocks = x_crop_offset * compptr->h_samp_factor;
     wipe_width = drop_width * compptr->h_samp_factor;
     y_wipe_blocks = y_crop_offset * compptr->v_samp_factor;
@@ -312,6 +312,83 @@ do_pixelize (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
   }
 }
 
+
+
+LOCAL(void)
+do_pixelize2(j_decompress_ptr srcinfo,
+             JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
+             jvirt_barray_ptr *src_coef_arrays,
+             JDIMENSION drop_width, JDIMENSION drop_height,
+             JDIMENSION pix_blk_ratio_x, JDIMENSION pix_blk_ratio_y,
+             boolean blk_align) {
+    JDIMENSION x_wipe_blocks, wipe_width;
+    JDIMENSION y_wipe_blocks, wipe_bottom;
+    int ci, offset_y, offset_x;
+    JBLOCKARRAY buffer;
+    jpeg_component_info *compptr;
+    int mcu_ratio_x, mcu_ratio_y;
+    int mcu_blk_x, mcu_blk_y;
+    mcu_ratio_x = pix_blk_ratio_x;
+    mcu_ratio_y = pix_blk_ratio_y;
+    for (ci = 0; ci < srcinfo->num_components; ci++) {
+        compptr = srcinfo->comp_info + ci;
+        x_wipe_blocks = x_crop_offset * compptr->h_samp_factor;
+        wipe_width = drop_width * compptr->h_samp_factor;
+        y_wipe_blocks = y_crop_offset * compptr->v_samp_factor;
+        wipe_bottom = drop_height * compptr->v_samp_factor + y_wipe_blocks;
+        mcu_blk_x = compptr->h_samp_factor * mcu_ratio_x;
+        mcu_blk_y = compptr->v_samp_factor * mcu_ratio_y;
+        JDIMENSION wipe_height = drop_height * compptr->v_samp_factor;
+        int step_x = mcu_blk_x, step_y = mcu_blk_y;
+        int start_x = 0, start_y = 0;
+        if (blk_align) {
+            /* Block Align mode */
+            start_y = y_wipe_blocks % mcu_blk_y;
+            step_y = mcu_blk_y - start_y;
+        }
+        for (offset_y = 0; offset_y < wipe_height; offset_y += step_y) {
+            if (offset_y) step_y = mcu_blk_y;
+            if (blk_align) {
+                /* Block Align mode */
+                start_x = x_wipe_blocks % mcu_blk_x;
+                step_x = mcu_blk_x - start_x;
+            }
+            for (offset_x = x_wipe_blocks;
+                 offset_x < x_wipe_blocks + wipe_width; offset_x += step_x) {
+                int ave = 0, num = 0;
+                if (offset_x > x_wipe_blocks) step_x = mcu_blk_x;
+                for (int local_y = 0;
+                     local_y < step_y && offset_y + local_y < wipe_height; local_y++) {
+                    buffer = (*srcinfo->mem->access_virt_barray)
+                            ((j_common_ptr) srcinfo, src_coef_arrays[ci],
+                             y_wipe_blocks + offset_y + local_y,
+                             (JDIMENSION) 1, TRUE);
+                    for (int local_x = 0; local_x < step_x && offset_x + local_x < x_wipe_blocks +
+                                                                                   wipe_width; local_x++) {
+                        JCOEF *blktop = buffer[0][offset_x + local_x];
+                        ave += blktop[0];
+                        num++;
+                        FMEMZERO(blktop + 1, (DCTSIZE2 - 1) * SIZEOF(JCOEF));
+                    }
+                }
+                ave /= num;
+                for (int local_y = 0;
+                     local_y < step_y && offset_y + local_y < wipe_height; local_y++) {
+                    buffer = (*srcinfo->mem->access_virt_barray)
+                            ((j_common_ptr) srcinfo, src_coef_arrays[ci],
+                             y_wipe_blocks + offset_y + local_y,
+                             (JDIMENSION) 1, TRUE);
+                    for (int local_x = 0; local_x < step_x && offset_x + local_x < x_wipe_blocks +
+                                                                                   wipe_width; local_x++) {
+                        buffer[0][offset_x + local_x][0] = ave;
+                    }
+                }
+                start_x = 0;
+            }
+            start_y = 0;
+        }
+    }
+}
 
 
 LOCAL(void)
@@ -1055,6 +1132,69 @@ trim_bottom_edge (jpeg_transform_info *info, JDIMENSION full_height)
   if (MCU_rows > 0 && info->y_crop_offset + MCU_rows ==
       full_height / info->iMCU_sample_height)
     info->output_height = MCU_rows * info->iMCU_sample_height;
+}
+
+
+GLOBAL(boolean)
+jtransform_parse_pixelize_spec(jpeg_pixelize_info *info, const char *spec) {
+    info->crop_width_set = JCROP_UNSET;
+    info->crop_height_set = JCROP_UNSET;
+    info->crop_xoffset_set = JCROP_UNSET;
+    info->crop_yoffset_set = JCROP_UNSET;
+    info->pix_blk_ratio_x = 1;
+    info->pix_blk_ratio_y = 1;
+    info->blk_align = FALSE;
+
+    if (isdigit(*spec)) {
+        /* fetch width */
+        if (!jt_read_integer(&spec, &info->crop_width))
+            return FALSE;
+        info->crop_width_set = JCROP_POS;
+    }
+    if (*spec == 'x' || *spec == 'X') {
+        /* fetch height */
+        spec++;
+        if (!jt_read_integer(&spec, &info->crop_height))
+            return FALSE;
+        info->crop_height_set = JCROP_POS;
+    }
+    if (*spec == '+' || *spec == '-') {
+        /* fetch xoffset */
+        info->crop_xoffset_set = (*spec == '-') ? JCROP_NEG : JCROP_POS;
+        spec++;
+        if (!jt_read_integer(&spec, &info->crop_xoffset))
+            return FALSE;
+    }
+    if (*spec == '+' || *spec == '-') {
+        /* fetch yoffset */
+        info->crop_yoffset_set = (*spec == '-') ? JCROP_NEG : JCROP_POS;
+        spec++;
+        if (!jt_read_integer(&spec, &info->crop_yoffset))
+            return FALSE;
+    }
+    if (*spec == '@') {
+        /* fetch pixelize size x */
+        spec++;
+        if (!jt_read_integer(&spec, &info->pix_blk_ratio_x))
+            return FALSE;
+    }
+    if (*spec == '@') {
+        /* fetch pixelize size y */
+        spec++;
+        if (!jt_read_integer(&spec, &info->pix_blk_ratio_y))
+            return FALSE;
+    }
+    if (info->pix_blk_ratio_x == 0 || info->pix_blk_ratio_y == 0)
+        return FALSE;
+    if (*spec == 'A' || *spec == 'a') {
+        /* fetch align flag */
+        spec++;
+        info->blk_align = TRUE;
+    }
+    /* We had better have gotten to the end of the string. */
+    if (*spec != '\0')
+        return FALSE;
+    return TRUE;
 }
 
 
@@ -1879,6 +2019,100 @@ adjust_exif_parameters (JOCTET FAR * data, unsigned int length,
 }
 
 
+GLOBAL(void)
+jtransform_prepare_pixelize(j_decompress_ptr srcinfo,
+                            jpeg_pixelize_info *info,
+                            jpeg_transform_info *tinfo) {
+    JDIMENSION xoffset, yoffset;
+    {
+        info->output_width = srcinfo->output_width;
+        info->output_height = srcinfo->output_height;
+        if (tinfo->num_components == 1) {
+            info->iMCU_sample_width = srcinfo->min_DCT_h_scaled_size;
+            info->iMCU_sample_height = srcinfo->min_DCT_v_scaled_size;
+        } else {
+            info->iMCU_sample_width =
+                    srcinfo->max_h_samp_factor * srcinfo->min_DCT_h_scaled_size;
+            info->iMCU_sample_height =
+                    srcinfo->max_v_samp_factor * srcinfo->min_DCT_v_scaled_size;
+        }
+    }
+    if (srcinfo->max_h_samp_factor * info->pix_blk_ratio_x *
+        srcinfo->max_v_samp_factor * info->pix_blk_ratio_y
+        > 65536 ||
+        info->pix_blk_ratio_x > 256 ||
+        info->pix_blk_ratio_y > 256) {
+        ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+    }
+    {
+        /* Insert default values for unset crop parameters */
+        if (info->crop_xoffset_set == JCROP_UNSET)
+            info->crop_xoffset = 0;    /* default to +0 */
+        if (info->crop_yoffset_set == JCROP_UNSET)
+            info->crop_yoffset = 0;    /* default to +0 */
+        if (info->crop_width_set == JCROP_UNSET) {
+            if (info->crop_xoffset >= info->output_width) {
+                ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+            }
+            info->crop_width = info->output_width - info->crop_xoffset;
+        } else {
+            /* Check for crop extension */
+            if (info->crop_width > info->output_width) {
+                ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+            } else {
+                if (info->crop_xoffset >= info->output_width ||
+                    info->crop_width <= 0 ||
+                    info->crop_xoffset > info->output_width - info->crop_width) {
+                    ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+                }
+            }
+        }
+        if (info->crop_height_set == JCROP_UNSET) {
+            if (info->crop_yoffset >= info->output_height) {
+                ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+            }
+            info->crop_height = info->output_height - info->crop_yoffset;
+        } else {
+            /* Check for crop extension */
+            if (info->crop_height > info->output_height) {
+                ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+            } else {
+                if (info->crop_yoffset >= info->output_height ||
+                    info->crop_height <= 0 ||
+                    info->crop_yoffset > info->output_height - info->crop_height) {
+                    ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
+                }
+            }
+        }
+        /* Convert negative crop offsets into regular offsets */
+        if (info->crop_xoffset_set != JCROP_NEG)
+            xoffset = info->crop_xoffset;
+        else if (info->crop_width > info->output_width) /* crop extension */
+            xoffset = info->crop_width - info->output_width - info->crop_xoffset;
+        else
+            xoffset = info->output_width - info->crop_width - info->crop_xoffset;
+        if (info->crop_yoffset_set != JCROP_NEG)
+            yoffset = info->crop_yoffset;
+        else if (info->crop_height > info->output_height) /* crop extension */
+            yoffset = info->crop_height - info->output_height - info->crop_yoffset;
+        else
+            yoffset = info->output_height - info->crop_height - info->crop_yoffset;
+        /* Now adjust so that upper left corner falls at an iMCU boundary */
+        {
+            info->drop_width = (JDIMENSION) jdiv_round_up
+                    ((long) (info->crop_width + (xoffset % info->iMCU_sample_width)),
+                     (long) info->iMCU_sample_width);
+            info->drop_height = (JDIMENSION) jdiv_round_up
+                    ((long) (info->crop_height + (yoffset % info->iMCU_sample_height)),
+                     (long) info->iMCU_sample_height);
+        }
+        /* Save x/y offsets measured in iMCUs */
+        info->x_crop_offset = xoffset / info->iMCU_sample_width;
+        info->y_crop_offset = yoffset / info->iMCU_sample_height;
+    }
+}
+
+
 /* Adjust output image parameters as needed.
  *
  * This must be called after jpeg_copy_critical_parameters()
@@ -2070,15 +2304,27 @@ jtransform_execute_transform (j_decompress_ptr srcinfo,
       do_flatten(srcinfo, dstinfo, info->x_crop_offset, info->y_crop_offset,
 		 src_coef_arrays, info->drop_width, info->drop_height);
     break;
-  /* Added for ajpegtran
-   *  When option is specified, call the pixelize function.
-   */
   case JXFORM_PIXELIZE:
-    do_pixelize(srcinfo, dstinfo, info->x_crop_offset, info->y_crop_offset,
-	      src_coef_arrays, info->drop_width, info->drop_height);
     break;
   }
 }
+
+
+GLOBAL(void)
+jtransform_execute_pixelize(j_decompress_ptr srcinfo,
+                            jvirt_barray_ptr *src_coef_arrays,
+                            jpeg_pixelize_info *info) {
+    if (info->pix_blk_ratio_x) {
+        do_pixelize2(srcinfo, info->x_crop_offset, info->y_crop_offset,
+                     src_coef_arrays, info->drop_width, info->drop_height,
+                     info->pix_blk_ratio_x, info->pix_blk_ratio_y,
+                     info->blk_align);
+    } else {
+        do_pixelize(srcinfo, info->x_crop_offset, info->y_crop_offset,
+                    src_coef_arrays, info->drop_width, info->drop_height);
+    }
+}
+
 
 /* jtransform_perfect_transform
  *

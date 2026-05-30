@@ -79,6 +79,11 @@ int coeff_adj;
 int coeff_offset[4];
 int monochrome;
 
+#define PIXELIZE_INFO_SIZE 8
+int pixelizenum;
+static jpeg_pixelize_info pixelizeinfo[PIXELIZE_INFO_SIZE];
+
+
 LOCAL(void)
 select_transform (JXFORM_CODE transform)
 /* Silly little routine to detect multiple transform options,
@@ -353,18 +358,16 @@ parse_switches (j_compress_ptr cinfo, char *argstr,
 
     } else if (keymatch(arg, "pixelize", 1)) {
 #if TRANSFORMS_SUPPORTED
-      arg2 = strtok(NULL," ");
-      if (!arg2){	/* advance to next argument */
-	/* error */
-	strcpy(errmsgbuffer,"Parse error:missed parameter(pixelize)");
-	return 0;
-      }
-      if (transformoption.crop /* reject multiple crop/wipe/pixelize requests */ ||
-	  ! jtransform_parse_crop_spec(&transformoption, arg2)) {
-	strcpy(errmsgbuffer,"Parse error:argument(pixelize)");
-	return 0;
-      }
-      select_transform(JXFORM_PIXELIZE);
+        arg2 = strtok(NULL, " ");
+        if (!arg2) {
+            strcpy(errmsgbuffer, "Parse error:missed parameter(pixelize)");
+            return 0;
+        }
+        if (pixelizenum >= PIXELIZE_INFO_SIZE ||
+            !jtransform_parse_pixelize_spec(pixelizeinfo + pixelizenum++, arg2)) {
+            strcpy(errmsgbuffer, "Parse error:argument(pixelize)");
+            return 0;
+        }
 #else
       select_transform(JXFORM_NONE);	/* force an error */
 #endif
@@ -502,7 +505,7 @@ void brightnessControl(
  * Execute Jpegtran.
  */
 JNIEXPORT jstring JNICALL
-Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtran( JNIEnv* env,
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_ajpegtran( JNIEnv* env,
                                          jobject thiz,
                                          jint rfd,
                                          jint wfd,
@@ -526,6 +529,7 @@ Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtran( JNIEnv* env,
   const char* optstr;
   char opttemp[OPTTEMP_SIZE];
   int parseResult;
+  int cnt;
 
   /* Note for ajpegtran
    *  Clear variables for extension functions.
@@ -536,6 +540,7 @@ Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtran( JNIEnv* env,
   coeff_offset[1] = 0;
   coeff_offset[2] = 0;
   coeff_offset[3] = 0;
+  pixelizenum = 0;
   errmsgbuffer[0]='\0';
 
   /* Note for ajpegtran
@@ -608,6 +613,10 @@ Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtran( JNIEnv* env,
     }
 #endif
 
+    for (cnt = 0; cnt < pixelizenum; cnt++) {
+      jtransform_prepare_pixelize(&srcinfo, pixelizeinfo + cnt, &transformoption);
+    }
+
     /* Read source file as DCT coefficients */
     src_coef_arrays = jpeg_read_coefficients(&srcinfo);
 
@@ -619,6 +628,10 @@ Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtran( JNIEnv* env,
     /* if brightness control option is specified, offset DC coefficient. */
     if (coeff_adj) {
       brightnessControl(&srcinfo,src_coef_arrays);
+    }
+
+    for (cnt = 0; cnt < pixelizenum; cnt++) {
+      jtransform_execute_pixelize(&srcinfo, src_coef_arrays, pixelizeinfo + cnt);
     }
 
     /* Initialize destination compression parameters from source values */
@@ -694,7 +707,7 @@ Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtran( JNIEnv* env,
  */
 
 JNIEXPORT jstring JNICALL
-Java_github_kamemak_ajpegtran_1example_MainActivity_ajpegtranhead( JNIEnv* env,
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_ajpegtranhead( JNIEnv* env,
                                          jobject thiz,
                                          jint fd,
                                          jintArray jParamArray
