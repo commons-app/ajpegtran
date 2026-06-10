@@ -829,3 +829,281 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_ajpegtranhead( JNIEnv* env,
   }
   return (*env)->NewStringUTF(env, "Unknown Error");
 }
+
+/**
+ * Options for a single JPEG transform operation.
+ */
+typedef struct {
+  /* Transform type (rotation, flip, etc.) */
+  JXFORM_CODE transform;
+  boolean trim;
+  boolean perfect;
+
+  /* Crop region */
+  boolean crop_enabled;
+  JDIMENSION crop_width;
+  JDIMENSION crop_height;
+  JDIMENSION crop_xoffset;
+  JDIMENSION crop_yoffset;
+  JCROP_CODE crop_width_set;
+  JCROP_CODE crop_height_set;
+  JCROP_CODE crop_xoffset_set;
+  JCROP_CODE crop_yoffset_set;
+
+  /* Pixelize regions  */
+  int pixelize_count;
+  jpeg_pixelize_info *pixelize_regions;
+
+  /* Marker copy option */
+  JCOPY_OPTION copy_option;
+} JpegTransformOptions;
+
+/**
+ * Core JPEG transformation engine.
+ * Handles decompression, transformation, compression, error handling
+ */
+LOCAL(jstring)
+execute_transform(JNIEnv* env, jint rfd, jint wfd,
+                  JpegTransformOptions* opts)
+{
+  struct jpeg_decompress_struct srcinfo;
+  struct jpeg_compress_struct dstinfo;
+  struct jpeg_error_mgr jsrcerr, jdsterr;
+  jvirt_barray_ptr *src_coef_arrays;
+  jvirt_barray_ptr *dst_coef_arrays;
+  jpeg_transform_info transformoption;
+  int cnt;
+
+  errno = 0;
+  errmsgbuffer[0] = '\0';
+
+  if (setjmp(jbuf) == 0) {
+    /* Initialize JPEG structures */
+    srcinfo.err = jpeg_std_error(&jsrcerr);
+    jpeg_create_decompress(&srcinfo);
+    dstinfo.err = jpeg_std_error(&jdsterr);
+    jpeg_create_compress(&dstinfo);
+
+#ifdef ENTROPY_OPT_SUPPORTED
+    dstinfo.optimize_coding = TRUE;
+#endif
+
+    /* Set up transformation options from our typed struct */
+    memset(&transformoption, 0, sizeof(transformoption));
+    transformoption.transform = opts->transform;
+    transformoption.trim = opts->trim;
+    transformoption.perfect = opts->perfect;
+    transformoption.force_grayscale = FALSE;
+    transformoption.crop = opts->crop_enabled;
+    if (opts->crop_enabled) {
+      transformoption.crop_width       = opts->crop_width;
+      transformoption.crop_width_set   = opts->crop_width_set;
+      transformoption.crop_height      = opts->crop_height;
+      transformoption.crop_height_set  = opts->crop_height_set;
+      transformoption.crop_xoffset     = opts->crop_xoffset;
+      transformoption.crop_xoffset_set = opts->crop_xoffset_set;
+      transformoption.crop_yoffset     = opts->crop_yoffset;
+      transformoption.crop_yoffset_set = opts->crop_yoffset_set;
+    }
+
+    /* Specify data source for decompression */
+    jpeg_stdio_src(&srcinfo, rfd);
+    /* Enable saving of extra markers that we want to copy */
+    jcopy_markers_setup(&srcinfo, opts->copy_option);
+    /* Read file header */
+    (void) jpeg_read_header(&srcinfo, TRUE);
+
+    /* Any space needed by a transform option must be requested before
+   * jpeg_read_coefficients so that memory allocation will be done right.
+   */
+#if TRANSFORMS_SUPPORTED
+      /* Fail right away if -perfect is given and transformation is not perfect.
+      */
+    if (!jtransform_request_workspace(&srcinfo, &transformoption)) {
+      strcpy(errmsgbuffer, "Setup error:perfect option can't be executed");
+      longjmp(jbuf, 1);
+    }
+#endif
+
+    /* Prepare pixelize regions */
+    for (cnt = 0; cnt < opts->pixelize_count; cnt++) {
+      jtransform_prepare_pixelize(&srcinfo,
+          &opts->pixelize_regions[cnt], &transformoption);
+    }
+
+    /* Read source DCT coefficients */
+    src_coef_arrays = jpeg_read_coefficients(&srcinfo);
+
+    /* Execute pixelize on DCT coefficients */
+    for (cnt = 0; cnt < opts->pixelize_count; cnt++) {
+      jtransform_execute_pixelize(&srcinfo, src_coef_arrays,
+          &opts->pixelize_regions[cnt]);
+    }
+
+    /* Initialize destination compression parameters from source values */
+    jpeg_copy_critical_parameters(&srcinfo, &dstinfo);
+
+   /* Adjust destination parameters if required by transform options;
+   * also find out which set of coefficient arrays will hold the output.
+   */
+#if TRANSFORMS_SUPPORTED
+    dst_coef_arrays = jtransform_adjust_parameters(&srcinfo, &dstinfo,
+                                                   src_coef_arrays,
+                                                   &transformoption);
+#else
+    dst_coef_arrays = src_coef_arrays;
+#endif
+
+    /* Close source file descriptors */
+    close(rfd);
+    rfd = -1;
+
+    /* Write dest metadata */
+    jpeg_stdio_dest(&dstinfo, wfd);
+    jpeg_write_coefficients(&dstinfo, dst_coef_arrays);
+    jcopy_markers_execute(&srcinfo, &dstinfo, opts->copy_option);
+
+#if TRANSFORMS_SUPPORTED
+    jtransform_execute_transformation(&srcinfo, &dstinfo,
+                                     src_coef_arrays,
+                                     &transformoption);
+#endif
+
+    jpeg_finish_compress(&dstinfo);
+    (void) jpeg_finish_decompress(&srcinfo);
+    strcpy(errmsgbuffer, "OK");
+  }
+  else {
+    LOGD("longjmp was occured");
+  }
+
+  jpeg_destroy_compress(&dstinfo);
+  jpeg_destroy_decompress(&srcinfo);
+  if (rfd != -1) close(rfd);
+  if (wfd != -1) close(wfd);
+
+  if (*errmsgbuffer) {
+    return (*env)->NewStringUTF(env, errmsgbuffer);
+  }
+  return (*env)->NewStringUTF(env, "Unknown Error");
+}
+
+/**
+ * Lossless JPEG rotate.
+ */
+JNIEXPORT jstring JNICALL
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeRotate(
+    JNIEnv* env, jobject thiz,
+    jint rfd, jint wfd,
+    jint degrees)
+{
+  JpegTransformOptions opts = {0};
+  opts.copy_option = JCOPYOPT_ALL;
+  opts.trim = false;
+  opts.perfect = false;
+
+  switch (degrees) {
+    case 90:  opts.transform = JXFORM_ROT_90;  break;
+    case 180: opts.transform = JXFORM_ROT_180; break;
+    case 270: opts.transform = JXFORM_ROT_270; break;
+    default:
+      return (*env)->NewStringUTF(env,
+          "Error: degrees must be 90, 180, or 270");
+  }
+
+  return execute_transform(env, rfd, wfd, &opts);
+}
+
+/**
+ * Lossless JPEG crop.
+ */
+JNIEXPORT jstring JNICALL
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeCrop(
+    JNIEnv* env, jobject thiz,
+    jint rfd, jint wfd,
+    jint x, jint y, jint width, jint height)
+{
+  JpegTransformOptions opts = {0};
+  opts.copy_option = JCOPYOPT_ALL;
+  opts.trim = false;
+
+  opts.crop_enabled    = TRUE;
+  opts.crop_width      = (JDIMENSION) width;
+  opts.crop_width_set  = JCROP_POS;
+  opts.crop_height     = (JDIMENSION) height;
+  opts.crop_height_set = JCROP_POS;
+  opts.crop_xoffset     = (JDIMENSION) x;
+  opts.crop_xoffset_set = JCROP_POS;
+  opts.crop_yoffset     = (JDIMENSION) y;
+  opts.crop_yoffset_set = JCROP_POS;
+
+  return execute_transform(env, rfd, wfd, &opts);
+}
+
+/**
+ * Lossless JPEG pixelize (blur).
+ *
+ * Applies one or more pixelize regions in a single decompress-compress pass.
+ * The regions array is a flat int[] with 7 ints per region:
+ *   [width, height, cornerX, cornerY, blockWidth, blockHeight, aligned]
+ */
+JNIEXPORT jstring JNICALL
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativePixelize(
+    JNIEnv* env, jobject thiz,
+    jint rfd, jint wfd,
+    jintArray regions)
+{
+  JpegTransformOptions opts = {0};
+  jstring result;
+  jint *data;
+  jint len;
+  int count, i;
+  jpeg_pixelize_info *infos;
+
+  opts.copy_option = JCOPYOPT_ALL;
+
+  /* Unpack Java int[] — 7 ints per region */
+  data = (*env)->GetIntArrayElements(env, regions, NULL);
+  if (!data) {
+    return (*env)->NewStringUTF(env,
+        "Error: failed to access regions array");
+  }
+  len = (*env)->GetArrayLength(env, regions);
+  count = len / 7;
+
+  if (count <= 0) {
+    (*env)->ReleaseIntArrayElements(env, regions, data, 0);
+    return (*env)->NewStringUTF(env,
+        "Error: no pixelize regions provided");
+  }
+
+  /* Dynamically allocate — no hardcoded limit */
+  infos = (jpeg_pixelize_info *) calloc(count, sizeof(jpeg_pixelize_info));
+  if (!infos) {
+    (*env)->ReleaseIntArrayElements(env, regions, data, 0);
+    return (*env)->NewStringUTF(env, "Error: memory allocation failed");
+  }
+
+  for (i = 0; i < count; i++) {
+    infos[i].pix_width       = (JDIMENSION) data[i * 7];
+    infos[i].pix_width_set   = JCROP_POS;
+    infos[i].pix_height      = (JDIMENSION) data[i * 7 + 1];
+    infos[i].pix_height_set  = JCROP_POS;
+    infos[i].pix_xoffset     = (JDIMENSION) data[i * 7 + 2];
+    infos[i].pix_xoffset_set = JCROP_POS;
+    infos[i].pix_yoffset     = (JDIMENSION) data[i * 7 + 3];
+    infos[i].pix_yoffset_set = JCROP_POS;
+    infos[i].pix_blk_ratio_x  = (JDIMENSION) data[i * 7 + 4];
+    infos[i].pix_blk_ratio_y  = (JDIMENSION) data[i * 7 + 5];
+    infos[i].blk_align        = (boolean)    data[i * 7 + 6];
+  }
+  (*env)->ReleaseIntArrayElements(env, regions, data, 0);
+
+  opts.pixelize_count = count;
+  opts.pixelize_regions = infos;
+
+  result = execute_transform(env, rfd, wfd, &opts);
+
+  free(infos);
+  return result;
+}

@@ -1137,39 +1137,39 @@ trim_bottom_edge (jpeg_transform_info *info, JDIMENSION full_height)
 
 GLOBAL(boolean)
 jtransform_parse_pixelize_spec(jpeg_pixelize_info *info, const char *spec) {
-    info->crop_width_set = JCROP_UNSET;
-    info->crop_height_set = JCROP_UNSET;
-    info->crop_xoffset_set = JCROP_UNSET;
-    info->crop_yoffset_set = JCROP_UNSET;
+    info->pix_width_set = JCROP_UNSET;
+    info->pix_height_set = JCROP_UNSET;
+    info->pix_xoffset_set = JCROP_UNSET;
+    info->pix_yoffset_set = JCROP_UNSET;
     info->pix_blk_ratio_x = 1;
     info->pix_blk_ratio_y = 1;
     info->blk_align = FALSE;
 
     if (isdigit(*spec)) {
         /* fetch width */
-        if (!jt_read_integer(&spec, &info->crop_width))
+        if (!jt_read_integer(&spec, &info->pix_width))
             return FALSE;
-        info->crop_width_set = JCROP_POS;
+        info->pix_width_set = JCROP_POS;
     }
     if (*spec == 'x' || *spec == 'X') {
         /* fetch height */
         spec++;
-        if (!jt_read_integer(&spec, &info->crop_height))
+        if (!jt_read_integer(&spec, &info->pix_height))
             return FALSE;
-        info->crop_height_set = JCROP_POS;
+        info->pix_height_set = JCROP_POS;
     }
     if (*spec == '+' || *spec == '-') {
         /* fetch xoffset */
-        info->crop_xoffset_set = (*spec == '-') ? JCROP_NEG : JCROP_POS;
+        info->pix_xoffset_set = (*spec == '-') ? JCROP_NEG : JCROP_POS;
         spec++;
-        if (!jt_read_integer(&spec, &info->crop_xoffset))
+        if (!jt_read_integer(&spec, &info->pix_xoffset))
             return FALSE;
     }
     if (*spec == '+' || *spec == '-') {
         /* fetch yoffset */
-        info->crop_yoffset_set = (*spec == '-') ? JCROP_NEG : JCROP_POS;
+        info->pix_yoffset_set = (*spec == '-') ? JCROP_NEG : JCROP_POS;
         spec++;
-        if (!jt_read_integer(&spec, &info->crop_yoffset))
+        if (!jt_read_integer(&spec, &info->pix_yoffset))
             return FALSE;
     }
     if (*spec == '@') {
@@ -2045,65 +2045,65 @@ jtransform_prepare_pixelize(j_decompress_ptr srcinfo,
         ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
     }
     {
-        /* Insert default values for unset crop parameters */
-        if (info->crop_xoffset_set == JCROP_UNSET)
-            info->crop_xoffset = 0;    /* default to +0 */
-        if (info->crop_yoffset_set == JCROP_UNSET)
-            info->crop_yoffset = 0;    /* default to +0 */
-        if (info->crop_width_set == JCROP_UNSET) {
-            if (info->crop_xoffset >= info->output_width) {
+        /* Insert default values for unset pixelize region parameters */
+        if (info->pix_xoffset_set == JCROP_UNSET)
+            info->pix_xoffset = 0;    /* default to +0 */
+        if (info->pix_yoffset_set == JCROP_UNSET)
+            info->pix_yoffset = 0;    /* default to +0 */
+        if (info->pix_width_set == JCROP_UNSET) {
+            if (info->pix_xoffset >= info->output_width) {
                 ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
             }
-            info->crop_width = info->output_width - info->crop_xoffset;
+            info->pix_width = info->output_width - info->pix_xoffset;
         } else {
-            /* Check for crop extension */
-            if (info->crop_width > info->output_width) {
+            /* Check for region bounds */
+            if (info->pix_width > info->output_width) {
                 ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
             } else {
-                if (info->crop_xoffset >= info->output_width ||
-                    info->crop_width <= 0 ||
-                    info->crop_xoffset > info->output_width - info->crop_width) {
+                if (info->pix_xoffset >= info->output_width ||
+                    info->pix_width <= 0 ||
+                    info->pix_xoffset > info->output_width - info->pix_width) {
                     ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
                 }
             }
         }
-        if (info->crop_height_set == JCROP_UNSET) {
-            if (info->crop_yoffset >= info->output_height) {
+        if (info->pix_height_set == JCROP_UNSET) {
+            if (info->pix_yoffset >= info->output_height) {
                 ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
             }
-            info->crop_height = info->output_height - info->crop_yoffset;
+            info->pix_height = info->output_height - info->pix_yoffset;
         } else {
-            /* Check for crop extension */
-            if (info->crop_height > info->output_height) {
+            /* Check for region bounds */
+            if (info->pix_height > info->output_height) {
                 ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
             } else {
-                if (info->crop_yoffset >= info->output_height ||
-                    info->crop_height <= 0 ||
-                    info->crop_yoffset > info->output_height - info->crop_height) {
+                if (info->pix_yoffset >= info->output_height ||
+                    info->pix_height <= 0 ||
+                    info->pix_yoffset > info->output_height - info->pix_height) {
                     ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
                 }
             }
         }
-        /* Convert negative crop offsets into regular offsets */
-        if (info->crop_xoffset_set != JCROP_NEG)
-            xoffset = info->crop_xoffset;
-        else if (info->crop_width > info->output_width) /* crop extension */
-            xoffset = info->crop_width - info->output_width - info->crop_xoffset;
+        /* Convert negative offsets into regular offsets */
+        if (info->pix_xoffset_set != JCROP_NEG)
+            xoffset = info->pix_xoffset;
+        else if (info->pix_width > info->output_width)
+            xoffset = info->pix_width - info->output_width - info->pix_xoffset;
         else
-            xoffset = info->output_width - info->crop_width - info->crop_xoffset;
-        if (info->crop_yoffset_set != JCROP_NEG)
-            yoffset = info->crop_yoffset;
-        else if (info->crop_height > info->output_height) /* crop extension */
-            yoffset = info->crop_height - info->output_height - info->crop_yoffset;
+            xoffset = info->output_width - info->pix_width - info->pix_xoffset;
+        if (info->pix_yoffset_set != JCROP_NEG)
+            yoffset = info->pix_yoffset;
+        else if (info->pix_height > info->output_height)
+            yoffset = info->pix_height - info->output_height - info->pix_yoffset;
         else
-            yoffset = info->output_height - info->crop_height - info->crop_yoffset;
+            yoffset = info->output_height - info->pix_height - info->pix_yoffset;
         /* Now adjust so that upper left corner falls at an iMCU boundary */
         {
             info->drop_width = (JDIMENSION) jdiv_round_up
-                    ((long) (info->crop_width + (xoffset % info->iMCU_sample_width)),
+                    ((long) (info->pix_width + (xoffset % info->iMCU_sample_width)),
                      (long) info->iMCU_sample_width);
             info->drop_height = (JDIMENSION) jdiv_round_up
-                    ((long) (info->crop_height + (yoffset % info->iMCU_sample_height)),
+                    ((long) (info->pix_height + (yoffset % info->iMCU_sample_height)),
                      (long) info->iMCU_sample_height);
         }
         /* Save x/y offsets measured in iMCUs */
