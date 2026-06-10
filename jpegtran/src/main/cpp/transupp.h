@@ -166,17 +166,17 @@ typedef struct {
  * Pixelize parameters struct.
  */
 typedef struct {
-    /* Pixelize parameters: application need not set these unless crop is TRUE.
-     * These can be filled in by jtransform_parse_crop_spec().
+    /* Pixelize region parameters: define the rectangular area to pixelize.
+     * These can be filled in by jtransform_parse_pixelize_spec().
      */
-    JDIMENSION crop_width;    /* Width of selected region */
-    JCROP_CODE crop_width_set;    /* (forced disables adjustment) */
-    JDIMENSION crop_height;    /* Height of selected region */
-    JCROP_CODE crop_height_set;    /* (forced disables adjustment) */
-    JDIMENSION crop_xoffset;    /* X offset of selected region */
-    JCROP_CODE crop_xoffset_set;    /* (negative measures from right edge) */
-    JDIMENSION crop_yoffset;    /* Y offset of selected region */
-    JCROP_CODE crop_yoffset_set;    /* (negative measures from bottom edge) */
+    JDIMENSION pix_width;    /* Width of pixelize region */
+    JCROP_CODE pix_width_set;    /* (forced disables adjustment) */
+    JDIMENSION pix_height;    /* Height of pixelize region */
+    JCROP_CODE pix_height_set;    /* (forced disables adjustment) */
+    JDIMENSION pix_xoffset;    /* X offset of pixelize region */
+    JCROP_CODE pix_xoffset_set;    /* (negative measures from right edge) */
+    JDIMENSION pix_yoffset;    /* Y offset of pixelize region */
+    JCROP_CODE pix_yoffset_set;    /* (negative measures from bottom edge) */
 
     /* Internal workspace: caller should not touch these */
     JDIMENSION output_width;    /* cropped destination dimensions */
