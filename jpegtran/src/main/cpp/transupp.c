@@ -75,7 +75,7 @@
  */
 
 
-LOCAL(void)
+GLOBAL(void)
 do_crop (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 	 JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
 	 jvirt_barray_ptr *src_coef_arrays,
@@ -648,7 +648,7 @@ do_transpose (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 }
 
 
-LOCAL(void)
+GLOBAL(void)
 do_rot_90 (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 	   JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
 	   jvirt_barray_ptr *src_coef_arrays,
@@ -729,7 +729,7 @@ do_rot_90 (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 }
 
 
-LOCAL(void)
+GLOBAL(void)
 do_rot_270 (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 	    JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
 	    jvirt_barray_ptr *src_coef_arrays,
@@ -800,7 +800,7 @@ do_rot_270 (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 }
 
 
-LOCAL(void)
+GLOBAL(void)
 do_rot_180 (j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
 	    JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
 	    jvirt_barray_ptr *src_coef_arrays,

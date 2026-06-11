@@ -192,7 +192,26 @@ typedef struct {
     JDIMENSION pix_blk_ratio_y; /* Pixelized block width in MCU */
     boolean blk_align; /* if TRUE, Pixelized block is aligned */
 } jpeg_pixelize_info;
-
+EXTERN(void) do_crop
+	JPP((j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
+	     JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
+	     jvirt_barray_ptr *src_coef_arrays,
+	     jvirt_barray_ptr *dst_coef_arrays));
+EXTERN(void) do_rot_90
+	JPP((j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
+	     JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
+	     jvirt_barray_ptr *src_coef_arrays,
+	     jvirt_barray_ptr *dst_coef_arrays));
+EXTERN(void) do_rot_180
+	JPP((j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
+	     JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
+	     jvirt_barray_ptr *src_coef_arrays,
+	     jvirt_barray_ptr *dst_coef_arrays));
+EXTERN(void) do_rot_270
+	JPP((j_decompress_ptr srcinfo, j_compress_ptr dstinfo,
+	     JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
+	     jvirt_barray_ptr *src_coef_arrays,
+	     jvirt_barray_ptr *dst_coef_arrays));
 
 #if TRANSFORMS_SUPPORTED
 

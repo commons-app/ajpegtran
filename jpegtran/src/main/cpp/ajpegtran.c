@@ -829,3 +829,268 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_ajpegtranhead( JNIEnv* env,
   }
   return (*env)->NewStringUTF(env, "Unknown Error");
 }
+
+/**
+ *
+ * Handles decompression, metadata - headers and markers, coefficients from the source file
+ * to be copied to the destination file.
+ * */
+LOCAL(void)
+pre_transform( jint rfd, jint wfd,
+            struct jpeg_decompress_struct *srcinfo,
+            struct jpeg_compress_struct *dstinfo,
+            struct jpeg_error_mgr *jsrcerr,
+            struct jpeg_error_mgr *jdsterr,
+            jvirt_barray_ptr **src_coef_arrays,
+            jvirt_barray_ptr **dst_coef_arrays
+            )
+{
+    errmsgbuffer[0] = '\0';
+
+    if (setjmp(jbuf) == 0) {
+        /* Initialize JPEG structures */
+        srcinfo->err = jpeg_std_error(jsrcerr);
+        jpeg_create_decompress(srcinfo);
+        dstinfo->err = jpeg_std_error(jdsterr);
+        jpeg_create_compress(dstinfo);
+
+#ifdef ENTROPY_OPT_SUPPORTED
+        dstinfo->optimize_coding = TRUE;
+#endif
+        jpeg_stdio_src(srcinfo, rfd);
+        /* Enable saving of extra markers that we want to copy */
+        jcopy_markers_setup(srcinfo, JCOPYOPT_ALL);
+        /* Read file header */
+        (void) jpeg_read_header(srcinfo, TRUE);
+
+#if TRANSFORMS_SUPPORTED
+        if (!jtransform_request_workspace(srcinfo, &transformoption)) {
+            strcpy(errmsgbuffer, "Setup error:perfect option can't be executed");
+            longjmp(jbuf, 1);
+        }
+#endif
+        /* Read source DCT coefficients */
+        *src_coef_arrays = jpeg_read_coefficients(srcinfo);
+
+        /* Initialize destination compression parameters from source values */
+        jpeg_copy_critical_parameters(srcinfo, dstinfo);
+
+#if TRANSFORMS_SUPPORTED
+        *dst_coef_arrays = jtransform_adjust_parameters(srcinfo, dstinfo,
+                                                       *src_coef_arrays,
+                                                       &transformoption);
+#else
+        *dst_coef_arrays = *src_coef_arrays;
+#endif
+
+        /* Close source file descriptors */
+        close(rfd);
+
+        /* Write dest metadata */
+        jpeg_stdio_dest(dstinfo, wfd);
+        jpeg_write_coefficients(dstinfo, *dst_coef_arrays);
+        jcopy_markers_execute(srcinfo, dstinfo, JCOPYOPT_ALL);
+    }
+}
+
+/**
+ * Handles the cleanup after the transformation is executed.
+ *
+ * */
+LOCAL(jstring)
+post_transform( JNIEnv *env,struct jpeg_decompress_struct *srcinfo,
+                                struct jpeg_compress_struct *dstinfo,
+                                jint rfd,
+                                jint wfd
+                                )
+{
+    jpeg_destroy_compress(dstinfo);
+    jpeg_destroy_decompress(srcinfo);
+    if (rfd != -1) close(rfd);
+    if (wfd != -1) close(wfd);
+    if (*errmsgbuffer) {
+        return (*env)->NewStringUTF(env, errmsgbuffer);
+    }
+    return (*env)->NewStringUTF(env, "Unknown Error");
+}
+
+/**
+ * Lossless JPEG rotate.
+ */
+JNIEXPORT jstring JNICALL
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeRotate(
+        JNIEnv* env, jobject thiz,
+        jint rfd, jint wfd,
+        jint degrees
+        )
+{
+    /* Initialize variables */
+    struct jpeg_decompress_struct srcinfo;
+    struct jpeg_compress_struct dstinfo;
+    struct jpeg_error_mgr jsrcerr, jdsterr;
+    jvirt_barray_ptr *src_coef_arrays = NULL;
+    jvirt_barray_ptr *dst_coef_arrays = NULL;
+
+    /* Set up transformation options */
+    memset(&transformoption, 0, sizeof(transformoption));
+    switch (degrees) {
+        case 90:  transformoption.transform = JXFORM_ROT_90;  break;
+        case 180: transformoption.transform = JXFORM_ROT_180; break;
+        case 270: transformoption.transform = JXFORM_ROT_270; break;
+        default:
+            return (*env)->NewStringUTF(env, "Error: degrees must be 90, 180, or 270");
+    }
+    /* Pre transform to handle all the metadata and coefficients */
+    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays);
+    /* apply transformation if not error while getting metadata and coefficients */
+    if (errmsgbuffer[0] == '\0' || strcmp(errmsgbuffer, "OK") == 0) {
+        switch (degrees) {
+            case 90:  do_rot_90(&srcinfo, &dstinfo, transformoption.x_crop_offset, transformoption.y_crop_offset, src_coef_arrays, dst_coef_arrays);  break;
+            case 180: do_rot_180(&srcinfo, &dstinfo, transformoption.x_crop_offset, transformoption.y_crop_offset, src_coef_arrays, dst_coef_arrays); break;
+            case 270: do_rot_270(&srcinfo, &dstinfo, transformoption.x_crop_offset, transformoption.y_crop_offset, src_coef_arrays, dst_coef_arrays); break;
+            default: break;
+        }
+
+        jpeg_finish_compress(&dstinfo);
+        (void) jpeg_finish_decompress(&srcinfo);
+        strcpy(errmsgbuffer, "OK");
+    }
+    /* Cleanup and return the result or exception in string */
+   return post_transform(env,&srcinfo, &dstinfo, -1, wfd); // rfd is closed in helper
+}
+
+
+/**
+ * Lossless JPEG crop.
+ */
+JNIEXPORT jstring JNICALL
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeCrop(
+        JNIEnv* env, jobject thiz,
+        jint rfd, jint wfd,
+        jint x, jint y, jint width, jint height
+        )
+{
+    /* Initialize variables */
+    struct jpeg_decompress_struct srcinfo;
+    struct jpeg_compress_struct dstinfo;
+    struct jpeg_error_mgr jsrcerr, jdsterr;
+    jvirt_barray_ptr *src_coef_arrays = NULL;
+    jvirt_barray_ptr *dst_coef_arrays = NULL;
+
+    /* Set up transformation options */
+    memset(&transformoption, 0, sizeof(transformoption));
+    transformoption.transform = JXFORM_NONE;
+    transformoption.trim = FALSE;
+    transformoption.perfect = FALSE;
+    transformoption.force_grayscale = FALSE;
+
+    transformoption.crop = TRUE;
+    transformoption.crop_width      = (JDIMENSION) width;
+    transformoption.crop_width_set  = JCROP_POS;
+    transformoption.crop_height     = (JDIMENSION) height;
+    transformoption.crop_height_set = JCROP_POS;
+    transformoption.crop_xoffset     = (JDIMENSION) x;
+    transformoption.crop_xoffset_set = JCROP_POS;
+    transformoption.crop_yoffset     = (JDIMENSION) y;
+    transformoption.crop_yoffset_set = JCROP_POS;
+
+    /* Pre transform to handle all the metadata and coefficients */
+    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays);
+
+    /* Apply transformation if not error while getting metadata and coefficients */
+    if (errmsgbuffer[0] == '\0' || strcmp(errmsgbuffer, "OK") == 0) {
+
+        do_crop(&srcinfo, &dstinfo, transformoption.x_crop_offset, transformoption.y_crop_offset, src_coef_arrays, dst_coef_arrays);
+        jpeg_finish_compress(&dstinfo);
+        (void) jpeg_finish_decompress(&srcinfo);
+        strcpy(errmsgbuffer, "OK");
+    }
+
+    /* Cleanup and return the result or exception in string */
+    return post_transform(env,&srcinfo, &dstinfo, -1, wfd);
+}
+
+/**
+ * Lossless JPEG pixelize (blur).
+ *
+ * Applies one or more pixelize regions in a single decompress-compress pass.
+ * The regions array is a flat int[] with 7 ints per region:
+ *   [width, height, cornerX, cornerY, blockWidth, blockHeight, aligned]
+ */
+JNIEXPORT jstring JNICALL
+Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativePixelize(
+        JNIEnv* env, jobject thiz,
+        jint rfd, jint wfd,
+        jintArray regions
+        )
+{
+    struct jpeg_decompress_struct srcinfo;
+    struct jpeg_compress_struct dstinfo;
+    struct jpeg_error_mgr jsrcerr, jdsterr;
+    jvirt_barray_ptr *src_coef_arrays = NULL;
+    jvirt_barray_ptr *dst_coef_arrays = NULL;
+
+    jint *data;
+    jint len;
+    int count, i;
+    jpeg_pixelize_info *infos;
+
+    /* Unpack Java int[] — 7 ints per region */
+    data = (*env)->GetIntArrayElements(env, regions, NULL);
+    if (!data) {
+        return (*env)->NewStringUTF(env, "Error: failed to access regions array");
+    }
+    len = (*env)->GetArrayLength(env, regions);
+    count = len / 7;
+
+    if (count <= 0) {
+        (*env)->ReleaseIntArrayElements(env, regions, data, 0);
+        return (*env)->NewStringUTF(env, "Error: no pixelize regions provided");
+    }
+
+    infos = (jpeg_pixelize_info *) calloc(count, sizeof(jpeg_pixelize_info));
+    if (!infos) {
+        (*env)->ReleaseIntArrayElements(env, regions, data, 0);
+        return (*env)->NewStringUTF(env, "Error: memory allocation failed");
+    }
+
+    for (i = 0; i < count; i++) {
+        infos[i].pix_width       = (JDIMENSION) data[i * 7];
+        infos[i].pix_width_set   = JCROP_POS;
+        infos[i].pix_height      = (JDIMENSION) data[i * 7 + 1];
+        infos[i].pix_height_set  = JCROP_POS;
+        infos[i].pix_xoffset     = (JDIMENSION) data[i * 7 + 2];
+        infos[i].pix_xoffset_set = JCROP_POS;
+        infos[i].pix_yoffset     = (JDIMENSION) data[i * 7 + 3];
+        infos[i].pix_yoffset_set = JCROP_POS;
+        infos[i].pix_blk_ratio_x  = (JDIMENSION) data[i * 7 + 4];
+        infos[i].pix_blk_ratio_y  = (JDIMENSION) data[i * 7 + 5];
+        infos[i].blk_align        = (boolean)    data[i * 7 + 6];
+    }
+    (*env)->ReleaseIntArrayElements(env, regions, data, 0);
+
+    /* Set up transformation options */
+    memset(&transformoption, 0, sizeof(transformoption));
+    transformoption.transform = JXFORM_NONE;
+
+    /* Pre transform to handle all the metadata and coefficients */
+    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays);
+
+    /* Apply transformation if not error while getting metadata and coefficients */
+    if (errmsgbuffer[0] == '\0' || strcmp(errmsgbuffer, "OK") == 0) {
+        for (i = 0; i < count; i++) {
+            jtransform_prepare_pixelize(&srcinfo, &infos[i], &transformoption);
+        }
+        for (i = 0; i < count; i++) {
+            jtransform_execute_pixelize(&srcinfo, src_coef_arrays, &infos[i]);
+        }
+
+        jpeg_finish_compress(&dstinfo);
+        (void) jpeg_finish_decompress(&srcinfo);
+        strcpy(errmsgbuffer, "OK");
+    }
+
+    /* Cleanup and return the result or exception in string */
+    free(infos);
+  return post_transform(env,&srcinfo, &dstinfo, -1, wfd);
+}
