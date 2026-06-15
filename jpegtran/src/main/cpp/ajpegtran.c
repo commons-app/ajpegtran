@@ -900,13 +900,11 @@ pre_transform( jint rfd, jint wfd,
 LOCAL(jstring)
 post_transform( JNIEnv *env,struct jpeg_decompress_struct *srcinfo,
                                 struct jpeg_compress_struct *dstinfo,
-                                jint rfd,
                                 jint wfd
                                 )
 {
     jpeg_destroy_compress(dstinfo);
     jpeg_destroy_decompress(srcinfo);
-    if (rfd != -1) close(rfd);
     if (wfd != -1) close(wfd);
     if (*errmsgbuffer) {
         return (*env)->NewStringUTF(env, errmsgbuffer);
@@ -956,7 +954,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeRotate(
         strcpy(errmsgbuffer, "OK");
     }
     /* Cleanup and return the result or exception in string */
-   return post_transform(env,&srcinfo, &dstinfo, -1, wfd); // rfd is closed in helper
+   return post_transform(env,&srcinfo, &dstinfo, wfd); // rfd is closed in helper
 }
 
 
@@ -1007,7 +1005,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeCrop(
     }
 
     /* Cleanup and return the result or exception in string */
-    return post_transform(env,&srcinfo, &dstinfo, -1, wfd);
+    return post_transform(env,&srcinfo, &dstinfo, wfd);
 }
 
 /**
@@ -1092,5 +1090,5 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativePixelize(
 
     /* Cleanup and return the result or exception in string */
     free(infos);
-  return post_transform(env,&srcinfo, &dstinfo, -1, wfd);
+  return post_transform(env,&srcinfo, &dstinfo, wfd);
 }

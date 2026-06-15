@@ -12,7 +12,6 @@ import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.view.View;
 import android.widget.Button;
@@ -32,33 +31,21 @@ import androidx.fragment.app.DialogFragment;
 import androidx.fragment.app.FragmentManager;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
-import fr.free.nrw.commons.jpegtran.BlurRegion;
+import fr.free.nrw.commons.jpegtran.blur.BlurRegion;
 import fr.free.nrw.commons.jpegtran.Jpegtran;
-import fr.free.nrw.commons.jpegtran.RotationDegree;
+import fr.free.nrw.commons.jpegtran.Properties;
+import fr.free.nrw.commons.jpegtran.rotate.RotationDegree;
 
 import android.graphics.RectF;
 
 
 public class MainActivity extends AppCompatActivity {
-    /* for jpeg_colorspace */
-    static final int JCS_UNKNOWN = 0;        /* error/unspecified */
-    static final int JCS_GRAYSCALE = 1;        /* monochrome */
-    static final int JCS_RGB = 2;        /* red/green/blue, standard RGB (sRGB) */
-    static final int JCS_YCbCr = 3;        /* Y/Cb/Cr (also known as YUV), standard YCC */
-    static final int JCS_CMYK = 4;        /* C/M/Y/K */
-    static final int JCS_YCCK = 5;        /* Y/Cb/Cr/K */
-    static final int JCS_BG_RGB = 6;        /* big gamut red/green/blue, bg-sRGB */
-    static final int JCS_BG_YCC = 7;        /* big gamut Y/Cb/Cr, bg-sYCC */
 
     static Uri loadUri = null;
     static String propertyStr = null;
@@ -78,7 +65,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Initializing the Jpegtran library.
-        jpegtran = new Jpegtran(getApplicationContext());
+        jpegtran = new Jpegtran(getApplicationContext(), Uri.EMPTY);
         imageView = findViewById(R.id.imageView);
         blurOverlayView = findViewById(R.id.blurOverlayView);
         cropOverlayView = findViewById(R.id.cropOverlayView);
@@ -159,23 +146,25 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
-                jpegtran.blur(loadUri, regions, p -> {
-                    if (p != null) {
-                        Bitmap bitmap = BitmapFactory.decodeFile(p.getAbsolutePath());
+                new Thread(() -> {
+                    try {
+                        File p = jpegtran.blur(regions);
                         runOnUiThread(() -> {
-                            updateLoadUri(p);
+                            Bitmap bitmap = BitmapFactory.decodeFile(p.getAbsolutePath());
                             blurOverlayView.resetZoom();
                             blurOverlayView.setOnZoomChangedListener(null);
                             imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
                             imageView.setImageBitmap(bitmap);
                             blurOverlayView.clearRegions();
                             blurOverlayView.setVisibility(View.GONE);
+                            Toast.makeText(this, "Blurred successfully", Toast.LENGTH_SHORT).show();
                         });
-                        Toast.makeText(this, "Blurred successfully", Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(this, "Blur failed", Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, "Blur failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        });
                     }
-                });
+                }).start();
             }
         });
 
@@ -209,23 +198,22 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Please open an image first", Toast.LENGTH_SHORT).show();
                 return;
             }
-            jpegtran.rotate(loadUri, RotationDegree.ROTATE_90, p -> {
-                if (p != null) {
-                    Bitmap bitmap = BitmapFactory.decodeFile(p.getAbsolutePath());
+            new Thread(() -> {
+                try {
+                    File p = jpegtran.rotate(RotationDegree.ROTATE_90);
                     runOnUiThread(() -> {
-                        updateLoadUri(p);
+                        Bitmap bitmap = BitmapFactory.decodeFile(p.getAbsolutePath());
                         imageView.setImageBitmap(bitmap);
                         blurOverlayView.clearRegions();
                         cropOverlayView.setVisibility(View.GONE);
                     });
-                } else {
+                } catch (Exception e) {
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "Rotation failed", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "Rotation failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
                 }
-            });
+            }).start();
         });
-
 
         // Register handler for open file selector
         //  -> Get JPEG property and display it
@@ -238,26 +226,31 @@ public class MainActivity extends AppCompatActivity {
                             Intent data = result.getData();
                             if (data != null) {
                                 Uri lloadUri = (Uri) data.getData();
-                                clearTempFiles();
-                                loadUri = lloadUri;
-                                imageView.setImageURI(lloadUri);
-                                blurOverlayView.clearRegions();
-                                cropOverlayView.setVisibility(View.GONE);
-                                findViewById(R.id.button_save).setVisibility(View.VISIBLE);
-
-
-                                assert lloadUri != null;
-                                jpegtran.getProperties(lloadUri, p -> {
-                                    // Display properties
-                                    TextView textView = (TextView) findViewById(R.id.text_view);
-                                    propertyStr = "File name : " + p.fileName + "\n";
-                                    propertyStr += "File size : " + p.fileSize + "\n";
-                                    propertyStr += "Width : " + p.width + "\n" + "Height : " + p.height + "\n";
-                                    propertyStr += "MCU Width : " + p.MCU_Width + "\n" + "MCU Height : " + p.MCU_Height + "\n";
-                                    propertyStr += "Color space : " + p.Color_space + "\n";
-                                    textView.setText(propertyStr);
-
-                                });
+                                 assert lloadUri != null;
+                                 loadUri = lloadUri;
+                                 imageView.setImageURI(lloadUri);
+                                 blurOverlayView.clearRegions();
+                                 cropOverlayView.setVisibility(View.GONE);
+                                 findViewById(R.id.button_save).setVisibility(View.VISIBLE);
+                                 jpegtran = new Jpegtran(getApplicationContext(), lloadUri);
+                                 new Thread(() -> {
+                                     try {
+                                         Properties p = jpegtran.getProperties(lloadUri);
+                                         runOnUiThread(() -> {
+                                             TextView textView = (TextView) findViewById(R.id.text_view);
+                                             propertyStr = "File name : " + p.fileName + "\n";
+                                             propertyStr += "File size : " + p.fileSize + "\n";
+                                             propertyStr += "Width : " + p.width + "\n" + "Height : " + p.height + "\n";
+                                             propertyStr += "MCU Width : " + p.MCU_Width + "\n" + "MCU Height : " + p.MCU_Height + "\n";
+                                             propertyStr += "Color space : " + p.Color_space + "\n";
+                                             textView.setText(propertyStr);
+                                         });
+                                     } catch (Exception e) {
+                                         runOnUiThread(() -> {
+                                             Toast.makeText(MainActivity.this, "Failed to get properties: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                         });
+                                     }
+                                 }).start();
                             }
                         }
                     }
@@ -272,48 +265,32 @@ public class MainActivity extends AppCompatActivity {
                     public void onActivityResult(ActivityResult result) {
                         if (result.getResultCode() == RESULT_OK) {
                             Intent data = result.getData();
-                            String jniresult;
                             if (data != null) {
                                 Uri saveUri = (Uri) data.getData();
                                 ContentResolver resolver = getContentResolver();
-                                try (ParcelFileDescriptor wparcelFd = resolver.openFileDescriptor(saveUri, "w");
-                                     ParcelFileDescriptor rparcelFd = "file".equals(loadUri.getScheme()) ?
-                                             ParcelFileDescriptor.open(new File(Objects.requireNonNull(loadUri.getPath())),
-                                                     ParcelFileDescriptor.MODE_READ_ONLY) :
-                                             resolver.openFileDescriptor(loadUri, "r");
-                                     FileInputStream fis = new FileInputStream(rparcelFd.getFileDescriptor());
-                                     FileOutputStream fos = new FileOutputStream(wparcelFd.getFileDescriptor())) {
-                                    // Sequentially read and write to save uri.
-                                    byte[] buf = new byte[8192];
-                                    int len;
-                                    while ((len = fis.read(buf)) > 0) {
-                                        fos.write(buf, 0, len);
-                                    }
-                                    jniresult = "OK";
-                                } catch (IOException e) {
-                                    jniresult = getString(R.string.mess_error_file);
-                                }
-                                if (jniresult.startsWith("OK")) {
+                                try {
+                                    jpegtran.save(saveUri);
+
+                                    // Workaround : To update mediastore, execute empty write.
                                     try {
-                                        // Workaround : To update mediastore, execute empty write.
                                         OutputStream outstream = resolver.openOutputStream(saveUri, "wa");
-                                        outstream.flush();
-                                        outstream.close();
+                                        if (outstream != null) {
+                                            outstream.flush();
+                                            outstream.close();
+                                        }
                                     } catch (IOException e) {
                                         // Discard exception
-                                        //  Mediastore may not be updated, but no recovery operation and continuable.
                                     }
                                     Toast.makeText(getApplicationContext(), getString(R.string.mess_success), Toast.LENGTH_LONG).show();
-                                } else {
-                                    // When error is occurred, zero size file still remain.
-                                    // It should be deleted.
+
+                                } catch (Exception e) {
+                                    // When error is occurred, zero size file still remain. It should be deleted.
                                     try {
                                         DocumentsContract.deleteDocument(resolver, saveUri);
-                                    } catch (FileNotFoundException e) {
+                                    } catch (FileNotFoundException ignored) {
                                         // Discard exception
-                                        //  The file is not exist, it is OK.
                                     }
-                                    Toast.makeText(getApplicationContext(), jniresult, Toast.LENGTH_LONG).show();
+                                    Toast.makeText(getApplicationContext(), getString(R.string.mess_error_file) + ": " + e.getMessage(), Toast.LENGTH_LONG).show();
                                 }
                             }
                         }
@@ -417,19 +394,21 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        jpegtran.crop(loadUri, width, height, x, y, p -> {
-            if (p != null) {
-                Bitmap bitmap = BitmapFactory.decodeFile(p.getAbsolutePath());
+        new Thread(() -> {
+            try {
+                File p = jpegtran.crop(width, height, x, y);
                 runOnUiThread(() -> {
-                    updateLoadUri(p);
+                    Bitmap bitmap = BitmapFactory.decodeFile(p.getAbsolutePath());
                     imageView.setImageBitmap(bitmap);
                     cropOverlayView.setVisibility(View.GONE);
+                    Toast.makeText(MainActivity.this, "Cropped successfully", Toast.LENGTH_SHORT).show();
                 });
-                Toast.makeText(this, "Cropped successfully", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, "Crop failed", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(MainActivity.this, "Crop failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
             }
-        });
+        }).start();
     }
 
     private RectF getBitmapRect(ImageView imageView) {
@@ -442,41 +421,11 @@ public class MainActivity extends AppCompatActivity {
         return rect;
     }
 
-
-    private void updateLoadUri(File newFile) {
-        if (newFile == null) return;
-
-        // Save the current loadUri to delete if it is a temp file
-        if (loadUri != null && "file".equals(loadUri.getScheme())) {
-            String path = loadUri.getPath();
-            if (path != null) {
-                File oldFile = new File(path);
-                if (tempFiles.contains(oldFile)) {
-                    oldFile.delete();
-                    tempFiles.remove(oldFile);
-                }
-            }
-        }
-
-        tempFiles.add(newFile);
-        loadUri = Uri.parse("file://" + newFile.getAbsolutePath());
-    }
-
-    private void clearTempFiles() {
-        for (File file : tempFiles) {
-            if (file != null && file.exists()) {
-                file.delete();
-            }
-        }
-        tempFiles.clear();
-    }
-
     /**
      * When app closed, clear variable.
      */
     @Override
     protected void onDestroy() {
-        clearTempFiles();
         if (isFinishing()) {
             loadUri = null;
             propertyStr = null;

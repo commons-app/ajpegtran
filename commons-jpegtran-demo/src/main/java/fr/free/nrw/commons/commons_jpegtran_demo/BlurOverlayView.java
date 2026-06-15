@@ -5,7 +5,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.PointF;
 import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
@@ -21,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-import fr.free.nrw.commons.jpegtran.BlurRegion;
+import fr.free.nrw.commons.jpegtran.blur.BlurRegion;
 
 /**
  * Custom overlay view to allow users to draw and select multiple rectangular
