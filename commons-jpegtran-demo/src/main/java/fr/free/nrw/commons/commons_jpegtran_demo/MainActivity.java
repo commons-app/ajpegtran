@@ -56,7 +56,6 @@ public class MainActivity extends AppCompatActivity {
     private ImageView imageView;
     private BlurOverlayView blurOverlayView;
     private CropOverlayView cropOverlayView;
-    private final List<File> tempFiles = new ArrayList<>();
     private Matrix baseImageMatrix = null;
 
     @Override
@@ -64,8 +63,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Initializing the Jpegtran library.
-        jpegtran = new Jpegtran(getApplicationContext(), Uri.EMPTY);
         imageView = findViewById(R.id.imageView);
         blurOverlayView = findViewById(R.id.blurOverlayView);
         cropOverlayView = findViewById(R.id.cropOverlayView);
@@ -226,8 +223,11 @@ public class MainActivity extends AppCompatActivity {
                             Intent data = result.getData();
                             if (data != null) {
                                 Uri lloadUri = (Uri) data.getData();
-                                 assert lloadUri != null;
                                  loadUri = lloadUri;
+                                 if(jpegtran!=null){
+                                     jpegtran.cleanup();
+                                     jpegtran = null;
+                                 }
                                  imageView.setImageURI(lloadUri);
                                  blurOverlayView.clearRegions();
                                  cropOverlayView.setVisibility(View.GONE);
@@ -427,10 +427,13 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         if (isFinishing()) {
+            jpegtran.cleanup();
+
             loadUri = null;
             propertyStr = null;
         }
         super.onDestroy();
+
     }
 
 }

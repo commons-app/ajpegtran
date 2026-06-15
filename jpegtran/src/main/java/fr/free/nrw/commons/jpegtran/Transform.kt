@@ -6,7 +6,7 @@ import android.os.ParcelFileDescriptor
 import java.io.File
 import java.util.Objects
 
-abstract class Tranform protected constructor(
+abstract class Transform protected constructor(
     protected val context: Context,
     protected val inputUri: Uri,
     protected val outputUri: Uri
@@ -50,8 +50,8 @@ abstract class Tranform protected constructor(
             if (tempRFd == null || tempWFd == null) {
                 throw Exception("Failed to open file descriptors")
             }
-            this@Tranform.rFd = tempRFd.detachFd()
-            this@Tranform.wFd = tempWFd.detachFd()
+            this@Transform.rFd = tempRFd.detachFd()
+            this@Transform.wFd = tempWFd.detachFd()
 
             transform() // Runs the JNI operation
         } finally {

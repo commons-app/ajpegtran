@@ -3,14 +3,14 @@ package fr.free.nrw.commons.jpegtran.rotate
 import android.content.Context
 import android.net.Uri
 import fr.free.nrw.commons.jpegtran.Jpegtran
-import fr.free.nrw.commons.jpegtran.Tranform
+import fr.free.nrw.commons.jpegtran.Transform
 
 class Rotate internal constructor(
     context: Context,
     inputUri: Uri,
     outputUri: Uri,
     private val rotation: Int
-) : Tranform(context, inputUri, outputUri) {
+) : Transform(context, inputUri, outputUri) {
 
     override fun transform() {
         val result = Jpegtran.nativeRotate(rFd, wFd, rotation)

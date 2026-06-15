@@ -112,17 +112,11 @@ class Jpegtran(
      */
     @Throws(java.io.IOException::class)
     fun save(destinationUri: Uri) {
-        val output = context.contentResolver.openOutputStream(destinationUri)
-            ?: throw java.io.IOException("Failed to open output stream for destination: $destinationUri")
-
-        val input = context.contentResolver.openInputStream(currentInputUri)
-            ?: throw java.io.IOException("Failed to open input stream for source: $currentInputUri")
-
-        output.use { o ->
-            input.use { i ->
-                i.copyTo(o)
-            }
-        }
+        context.contentResolver.openInputStream(currentInputUri)?.use { input ->
+            context.contentResolver.openOutputStream(destinationUri)?.use { output ->
+                input.copyTo(output)
+            } ?: throw java.io.IOException("Failed to open output stream for destination: $destinationUri")
+        } ?: throw java.io.IOException("Failed to open input stream for source: $currentInputUri")
     }
 
     /**
@@ -145,23 +139,14 @@ class Jpegtran(
         }
     }
 
-
     /**
-     * Cleans up all temporary files created on disk by the Jpegtran instance.
+     * Cleans up all temporary files created on disk.
      */
     fun cleanup() {
         tempFileA?.takeIf { it.exists() }?.delete()
         tempFileB?.takeIf { it.exists() }?.delete()
         tempFileA = null
         tempFileB = null
-    }
-
-    /**
-     * Runs when this class is GC'd by the OS.
-     * */
-    @Suppress("deprecation")
-    protected fun finalize() {
-            cleanup()
     }
 
     companion object {
