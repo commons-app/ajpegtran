@@ -883,8 +883,7 @@ pre_transform( jint rfd, jint wfd,
         *dst_coef_arrays = *src_coef_arrays;
 #endif
 
-        /* Close source file descriptors */
-        close(rfd);
+        /* Source file descriptor will be closed in post_transform to prevent leak on longjmp error paths */
 
         /* Write dest metadata */
         jpeg_stdio_dest(dstinfo, wfd);
@@ -895,6 +894,8 @@ pre_transform( jint rfd, jint wfd,
 
 /**
  * Handles the cleanup after the transformation is executed.
+ * Even if exception occur in the libjpeg and setjmp is called in the pre_transform,
+ * This function gets called.
  *
  * */
 LOCAL(jstring)
@@ -956,7 +957,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeRotate(
         strcpy(errmsgbuffer, "OK");
     }
     /* Cleanup and return the result or exception in string */
-   return post_transform(env,&srcinfo, &dstinfo, -1, wfd); // rfd is closed in helper
+   return post_transform(env,&srcinfo, &dstinfo, rfd, wfd); // rfd is now closed in post_transform
 }
 
 
@@ -1007,7 +1008,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeCrop(
     }
 
     /* Cleanup and return the result or exception in string */
-    return post_transform(env,&srcinfo, &dstinfo, -1, wfd);
+    return post_transform(env,&srcinfo, &dstinfo, rfd, wfd);
 }
 
 /**
@@ -1092,5 +1093,5 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativePixelize(
 
     /* Cleanup and return the result or exception in string */
     free(infos);
-  return post_transform(env,&srcinfo, &dstinfo, -1, wfd);
+  return post_transform(env,&srcinfo, &dstinfo, rfd, wfd);
 }
