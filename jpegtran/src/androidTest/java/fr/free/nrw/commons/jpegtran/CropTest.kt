@@ -50,7 +50,7 @@ class CropTest {
             jpegtran.crop(cropWidth, cropHeight, imageWidth - cropWidth + 10, cropY)
             fail("Expected RuntimeException for out-of-bounds crop")
         } catch (e: RuntimeException) {
-            assertTrue(e.message!!.contains("Native crop failed"))
+            assertTrue((e.message ?: "").contains("Native crop failed"))
         }
         // Verify Cleanup.
         jpegtran.cleanup()

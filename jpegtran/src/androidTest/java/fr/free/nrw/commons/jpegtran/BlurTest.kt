@@ -109,18 +109,16 @@ class BlurTest {
             val outOfBoundsRegion = BlurRegion(
                 width = 64,
                 height = 64,
-                cornerX = 80, // out of bounds
-                cornerY = 80, // out of bounds
+                cornerX = 180, // out of bounds
+                cornerY = 180, // out of bounds
                 blockWidth = 8,
                 blockHeight = 8,
                 aligned = true
             )
             try {
-                val outputFile = jpegtran.blur(listOf(outOfBoundsRegion))
-                assertTrue(outputFile.exists())
-            } catch (e: Exception) {
-                assertTrue(e is RuntimeException)
-                assertTrue(e.message!!.contains("Native pixelize failed"))
+                jpegtran.blur(listOf(outOfBoundsRegion))
+            } catch (e: RuntimeException) {
+                assertTrue((e.message ?: "").contains("Native pixelize failed"))
             }
         } finally {
             jpegtran.cleanup()

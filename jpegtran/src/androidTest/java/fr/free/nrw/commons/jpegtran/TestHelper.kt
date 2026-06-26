@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.rules.TemporaryFolder
 import java.io.File
 
@@ -40,12 +41,6 @@ object TestHelper {
     fun assertBitmapsEqual(expected: Bitmap, actual: Bitmap) {
         assertEquals("Bitmap width mismatch", expected.width, actual.width)
         assertEquals("Bitmap height mismatch", expected.height, actual.height)
-        for (y in 0 until expected.height) {
-            for (x in 0 until expected.width) {
-                val expectedPixel = expected.getPixel(x, y)
-                val actualPixel = actual.getPixel(x, y)
-                assertEquals("Pixel mismatch at ($x, $y)", expectedPixel, actualPixel)
-            }
-        }
+        assertTrue("Bitmap pixels mismatch", expected.sameAs(actual))
     }
 }
