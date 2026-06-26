@@ -20,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-import fr.free.nrw.commons.jpegtran.blur.BlurRegion;
+import fr.free.nrw.commons.ajpegtran.blur.BlurRegion;
 
 /**
  * Custom overlay view to allow users to draw and select multiple rectangular

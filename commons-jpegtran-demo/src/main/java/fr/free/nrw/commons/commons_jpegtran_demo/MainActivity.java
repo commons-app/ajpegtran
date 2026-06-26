@@ -34,13 +34,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.ArrayList;
 import java.util.List;
 
-import fr.free.nrw.commons.jpegtran.blur.BlurRegion;
-import fr.free.nrw.commons.jpegtran.Jpegtran;
-import fr.free.nrw.commons.jpegtran.Properties;
-import fr.free.nrw.commons.jpegtran.rotate.RotationDegree;
+import fr.free.nrw.commons.ajpegtran.blur.BlurRegion;
+import fr.free.nrw.commons.ajpegtran.Jpegtran;
+import fr.free.nrw.commons.ajpegtran.Properties;
+import fr.free.nrw.commons.ajpegtran.rotate.RotationDegree;
 
 import android.graphics.RectF;
 
