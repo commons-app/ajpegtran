@@ -36,7 +36,6 @@ class CropTest {
         sourceUri = Uri.fromFile(sourceFile)
     }
 
-
     @Test
     fun testCropOutOfBounds_throwsException() {
         val jpegtran = Jpegtran(context, sourceUri)
@@ -53,11 +52,10 @@ class CropTest {
         } catch (e: RuntimeException) {
             assertTrue(e.message!!.contains("Native crop failed"))
         }
-
-        // Verify cleanup
-        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
-        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran_") }
+        // Verify Cleanup.
         jpegtran.cleanup()
+        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
         assertTrue("clean up temp files", tempFiles.isEmpty())
     }
 
@@ -119,6 +117,13 @@ class CropTest {
 
         val expectedBitmap = TestHelper.decodeAssetBitmap("expected_crop.jpg")
         TestHelper.assertBitmapsEqual(expectedBitmap, croppedBitmap)
+
+        // Verify Cleanup
+        jpegtran.cleanup()
+        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
+        assertTrue("clean up temp files", tempFiles.isEmpty())
+
     }
 
 }

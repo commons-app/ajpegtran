@@ -31,33 +31,6 @@ class BlurTest {
         sourceUri = Uri.fromFile(sourceFile)
     }
 
-
-    @Test
-    fun testBlurMultipleRegions() {
-        val jpegtran = Jpegtran(context, sourceUri)
-        val region1 = BlurRegion(
-            width = 32,
-            height = 32,
-            cornerX = 16,
-            cornerY = 16,
-            blockWidth = 8,
-            blockHeight = 8,
-            aligned = true
-        )
-        val region2 = BlurRegion(
-            width = 16,
-            height = 16,
-            cornerX = 64,
-            cornerY = 64,
-            blockWidth = 8,
-            blockHeight = 8,
-            aligned = false
-        )
-        val blurredFile = jpegtran.blur(listOf(region1, region2))
-        assertTrue("Blurred file should exist", blurredFile.exists())
-        assertTrue("Blurred file should not be empty", blurredFile.length() > 0)
-    }
-
     @Test
     fun testBlurValidation_emptyRegions() {
         val jpegtran = Jpegtran(context, sourceUri)
@@ -132,21 +105,28 @@ class BlurTest {
     @Test
     fun testBlurOutOfBounds() {
         val jpegtran = Jpegtran(context, sourceUri)
-        val outOfBoundsRegion = BlurRegion(
-            width = 64,
-            height = 64,
-            cornerX = 80, // out of bounds
-            cornerY = 80, // out of bounds
-            blockWidth = 8,
-            blockHeight = 8,
-            aligned = true
-        )
         try {
-            val outputFile = jpegtran.blur(listOf(outOfBoundsRegion))
-            assertTrue(outputFile.exists())
-        } catch (e: Exception) {
-            assertTrue(e is RuntimeException)
-            assertTrue(e.message!!.contains("Native pixelize failed"))
+            val outOfBoundsRegion = BlurRegion(
+                width = 64,
+                height = 64,
+                cornerX = 80, // out of bounds
+                cornerY = 80, // out of bounds
+                blockWidth = 8,
+                blockHeight = 8,
+                aligned = true
+            )
+            try {
+                val outputFile = jpegtran.blur(listOf(outOfBoundsRegion))
+                assertTrue(outputFile.exists())
+            } catch (e: Exception) {
+                assertTrue(e is RuntimeException)
+                assertTrue(e.message!!.contains("Native pixelize failed"))
+            }
+        } finally {
+            jpegtran.cleanup()
+            val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+            val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
+            assertTrue("clean up temp files", tempFiles.isEmpty())
         }
     }
 
@@ -172,5 +152,44 @@ class BlurTest {
 
         val expectedBitmap = TestHelper.decodeAssetBitmap("expected_blur.jpg")
         TestHelper.assertBitmapsEqual(expectedBitmap, blurredBitmap)
+
+        jpegtran.cleanup()
+        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
+        assertTrue("clean up temp files", tempFiles.isEmpty())
     }
+
+    @Test
+    fun testBlurMultipleRegions() {
+        val jpegtran = Jpegtran(context, sourceUri)
+
+        val region1 = BlurRegion(
+            width = 32,
+            height = 32,
+            cornerX = 16,
+            cornerY = 16,
+            blockWidth = 8,
+            blockHeight = 8,
+            aligned = true
+        )
+        val region2 = BlurRegion(
+            width = 16,
+            height = 16,
+            cornerX = 64,
+            cornerY = 64,
+            blockWidth = 8,
+            blockHeight = 8,
+            aligned = false
+        )
+        val blurredFile = jpegtran.blur(listOf(region1, region2))
+        assertTrue("Blurred file should exist", blurredFile.exists())
+        assertTrue("Blurred file should not be empty", blurredFile.length() > 0)
+        // Verify Cleanup
+        jpegtran.cleanup()
+        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
+        assertTrue("clean up temp files", tempFiles.isEmpty())
+
+    }
+
 }

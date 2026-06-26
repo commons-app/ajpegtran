@@ -58,17 +58,32 @@ class RotateTest {
         // Verify dimensions swap 90/270 for dimensions check.
         val originalBitmap = BitmapFactory.decodeFile(sourceFile.absolutePath)
         if (degree == RotationDegree.ROTATE_90 || degree == RotationDegree.ROTATE_270) {
-            assertEquals("Width should equal original height", originalBitmap.height, rotatedBitmap.width)
-            assertEquals("Height should equal original width", originalBitmap.width, rotatedBitmap.height)
+            assertEquals(
+                "Width should equal original height",
+                originalBitmap.height,
+                rotatedBitmap.width
+            )
+            assertEquals(
+                "Height should equal original width",
+                originalBitmap.width,
+                rotatedBitmap.height
+            )
         } else {
             assertEquals("Width should match original", originalBitmap.width, rotatedBitmap.width)
-            assertEquals("Height should match original", originalBitmap.height, rotatedBitmap.height)
+            assertEquals(
+                "Height should match original",
+                originalBitmap.height,
+                rotatedBitmap.height
+            )
         }
 
         val expectedBitmap = TestHelper.decodeAssetBitmap(expectedAssetName)
         TestHelper.assertBitmapsEqual(expectedBitmap, rotatedBitmap)
+        // Verify Cleanup.
+        jpegtran.cleanup()
+        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
+        assertTrue("clean up temp files", tempFiles.isEmpty())
     }
-
-
 
 }
