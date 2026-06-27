@@ -2,7 +2,7 @@ package fr.free.nrw.commons.ajpegtran.blur
 
 import android.content.Context
 import android.net.Uri
-import fr.free.nrw.commons.ajpegtran.Jpegtran
+import fr.free.nrw.commons.ajpegtran.JpegtranNative
 import fr.free.nrw.commons.ajpegtran.Transform
 
 class Blur internal constructor(
@@ -28,7 +28,7 @@ class Blur internal constructor(
             regionsArray[i * 7 + 6] = if (r.aligned) 1 else 0
         }
 
-        val result = Jpegtran.nativePixelize(rFd, wFd, regionsArray)
+        val result = JpegtranNative.nativePixelize(rFd, wFd, regionsArray)
         if (result == null || !result.startsWith("OK")) {
             throw RuntimeException("Native pixelize failed: $result")
         }

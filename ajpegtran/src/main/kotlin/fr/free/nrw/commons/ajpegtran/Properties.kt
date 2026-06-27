@@ -60,7 +60,7 @@ class Properties internal constructor(
                     throw IOException("Failed to open input file descriptor")
                 }
 
-                val result: String = Jpegtran.ajpegtranhead(parcelFd.detachFd(), retarray)
+                val result: String = JpegtranNative.ajpegtranhead(parcelFd.detachFd(), retarray)
                 if (!result.startsWith("OK")) {
                     throw RuntimeException("Native ajpegtranhead failed: $result")
                 }

@@ -707,7 +707,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_ajpegtran( JNIEnv* env,
  */
 
 JNIEXPORT jstring JNICALL
-Java_fr_free_nrw_commons_jpegtran_Jpegtran_ajpegtranhead( JNIEnv* env,
+Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_ajpegtranhead( JNIEnv* env,
                                          jobject thiz,
                                          jint fd,
                                          jintArray jParamArray
@@ -919,7 +919,7 @@ post_transform( JNIEnv *env,struct jpeg_decompress_struct *srcinfo,
  * Lossless JPEG rotate.
  */
 JNIEXPORT jstring JNICALL
-Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeRotate(
+Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeRotate(
         JNIEnv* env, jobject thiz,
         jint rfd, jint wfd,
         jint degrees
@@ -965,7 +965,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeRotate(
  * Lossless JPEG crop.
  */
 JNIEXPORT jstring JNICALL
-Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeCrop(
+Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeCrop(
         JNIEnv* env, jobject thiz,
         jint rfd, jint wfd,
         jint x, jint y, jint width, jint height
@@ -1019,7 +1019,7 @@ Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativeCrop(
  *   [width, height, cornerX, cornerY, blockWidth, blockHeight, aligned]
  */
 JNIEXPORT jstring JNICALL
-Java_fr_free_nrw_commons_jpegtran_Jpegtran_nativePixelize(
+Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativePixelize(
         JNIEnv* env, jobject thiz,
         jint rfd, jint wfd,
         jintArray regions
