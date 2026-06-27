@@ -2,7 +2,7 @@ package fr.free.nrw.commons.ajpegtran.rotate
 
 import android.content.Context
 import android.net.Uri
-import fr.free.nrw.commons.ajpegtran.Jpegtran
+import fr.free.nrw.commons.ajpegtran.JpegtranNative
 import fr.free.nrw.commons.ajpegtran.Transform
 
 class Rotate internal constructor(
@@ -13,7 +13,7 @@ class Rotate internal constructor(
 ) : Transform(context, inputUri, outputUri) {
 
     override fun transform() {
-        val result = Jpegtran.nativeRotate(rFd, wFd, rotation)
+        val result = JpegtranNative.nativeRotate(rFd, wFd, rotation)
         if (result == null || !result.startsWith("OK")) {
             throw RuntimeException("Native rotate failed: $result")
         }
