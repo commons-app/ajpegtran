@@ -842,7 +842,9 @@ pre_transform( jint rfd, jint wfd,
             struct jpeg_error_mgr *jsrcerr,
             struct jpeg_error_mgr *jdsterr,
             jvirt_barray_ptr **src_coef_arrays,
-            jvirt_barray_ptr **dst_coef_arrays
+            jvirt_barray_ptr **dst_coef_arrays,
+            boolean rm_orientation,
+            boolean rm_thumbnail
             )
 {
     errmsgbuffer[0] = '\0';
@@ -874,6 +876,8 @@ pre_transform( jint rfd, jint wfd,
 
         /* Initialize destination compression parameters from source values */
         jpeg_copy_critical_parameters(srcinfo, dstinfo);
+        dstinfo->remove_orientation_info = rm_orientation;
+        dstinfo->remove_thumbnail = rm_thumbnail;
 
 #if TRANSFORMS_SUPPORTED
         *dst_coef_arrays = jtransform_adjust_parameters(srcinfo, dstinfo,
@@ -934,6 +938,10 @@ Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeRotate(
 
     /* Set up transformation options */
     memset(&transformoption, 0, sizeof(transformoption));
+
+    // For Images which are not perfect, Have incomplete block on either edge,
+    // Trims to make it perfect block   .
+    transformoption.trim = TRUE;
     switch (degrees) {
         case 90:  transformoption.transform = JXFORM_ROT_90;  break;
         case 180: transformoption.transform = JXFORM_ROT_180; break;
@@ -942,7 +950,7 @@ Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeRotate(
             return (*env)->NewStringUTF(env, "Error: degrees must be 90, 180, or 270");
     }
     /* Pre transform to handle all the metadata and coefficients */
-    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays);
+    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays, TRUE, TRUE);
     /* apply transformation if not error while getting metadata and coefficients */
     if (errmsgbuffer[0] == '\0' || strcmp(errmsgbuffer, "OK") == 0) {
         switch (degrees) {
@@ -996,7 +1004,7 @@ Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeCrop(
     transformoption.crop_yoffset_set = JCROP_POS;
 
     /* Pre transform to handle all the metadata and coefficients */
-    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays);
+    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays, FALSE, TRUE);
 
     /* Apply transformation if not error while getting metadata and coefficients */
     if (errmsgbuffer[0] == '\0' || strcmp(errmsgbuffer, "OK") == 0) {
@@ -1075,7 +1083,7 @@ Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativePixelize(
     transformoption.transform = JXFORM_NONE;
 
     /* Pre transform to handle all the metadata and coefficients */
-    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays);
+    pre_transform(rfd, wfd, &srcinfo, &dstinfo, &jsrcerr, &jdsterr, &src_coef_arrays, &dst_coef_arrays, FALSE, TRUE);
 
     /* Apply transformation if not error while getting metadata and coefficients */
     if (errmsgbuffer[0] == '\0' || strcmp(errmsgbuffer, "OK") == 0) {
