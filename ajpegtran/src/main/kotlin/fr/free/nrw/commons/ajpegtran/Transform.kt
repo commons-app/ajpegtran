@@ -53,7 +53,8 @@ abstract class Transform protected constructor(
             this@Transform.rFd = tempRFd.detachFd()
             this@Transform.wFd = tempWFd.detachFd()
 
-            transform() // Runs the JNI operation
+            // JNI call is dispatched to the single JNI thread.
+            JpegtranNative.runOnJniThread { transform() }
         } finally {
             try {
                 tempRFd?.close()
