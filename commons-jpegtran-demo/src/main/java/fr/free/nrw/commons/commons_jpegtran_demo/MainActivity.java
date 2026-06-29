@@ -9,6 +9,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
 import android.graphics.drawable.Drawable;
+
+import androidx.exifinterface.media.ExifInterface;
+
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -33,6 +36,7 @@ import androidx.fragment.app.FragmentManager;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 
@@ -222,34 +226,59 @@ public class MainActivity extends AppCompatActivity {
                             Intent data = result.getData();
                             if (data != null) {
                                 Uri lloadUri = (Uri) data.getData();
-                                 loadUri = lloadUri;
-                                 if(jpegtran!=null){
-                                     jpegtran.cleanup();
-                                     jpegtran = null;
-                                 }
-                                 imageView.setImageURI(lloadUri);
-                                 blurOverlayView.clearRegions();
-                                 cropOverlayView.setVisibility(View.GONE);
-                                 findViewById(R.id.button_save).setVisibility(View.VISIBLE);
-                                 jpegtran = new Jpegtran(getApplicationContext(), lloadUri);
-                                 new Thread(() -> {
-                                     try {
-                                         Properties p = jpegtran.getProperties(lloadUri);
-                                         runOnUiThread(() -> {
-                                             TextView textView = (TextView) findViewById(R.id.text_view);
-                                             propertyStr = "File name : " + p.fileName + "\n";
-                                             propertyStr += "File size : " + p.fileSize + "\n";
-                                             propertyStr += "Width : " + p.width + "\n" + "Height : " + p.height + "\n";
-                                             propertyStr += "MCU Width : " + p.MCU_Width + "\n" + "MCU Height : " + p.MCU_Height + "\n";
-                                             propertyStr += "Color space : " + p.Color_space + "\n";
-                                             textView.setText(propertyStr);
-                                         });
-                                     } catch (Exception e) {
-                                         runOnUiThread(() -> {
-                                             Toast.makeText(MainActivity.this, "Failed to get properties: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                         });
-                                     }
-                                 }).start();
+                                loadUri = lloadUri;
+                                if (jpegtran != null) {
+                                    jpegtran.cleanup();
+                                    jpegtran = null;
+                                }
+                                imageView.setImageURI(lloadUri);
+                                blurOverlayView.clearRegions();
+                                cropOverlayView.setVisibility(View.GONE);
+                                findViewById(R.id.button_save).setVisibility(View.VISIBLE);
+                                jpegtran = new Jpegtran(getApplicationContext(), lloadUri);
+                                new Thread(() -> {
+                                    try {
+                                        Properties p = jpegtran.getProperties(lloadUri);
+
+                                        int orientation = 1;
+                                        boolean hasThumbnail = false;
+                                        int compression = 7;
+                                        ContentResolver resolver = getContentResolver();
+                                        try (InputStream in = resolver.openInputStream(lloadUri)) {
+                                            if (in != null) {
+                                                ExifInterface exif = new ExifInterface(in);
+                                                orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION,
+                                                        ExifInterface.ORIENTATION_NORMAL);
+                                                hasThumbnail = exif.hasThumbnail();
+                                                compression = exif.getAttributeInt(ExifInterface.TAG_COMPRESSION,
+                                                        7);
+                                            }
+                                        } catch (IOException e) {
+                                            // Ignore
+                                        }
+
+                                        final int finalOrientation = orientation;
+                                        final boolean finalHasThumbnail = hasThumbnail;
+                                        final int finalCompression = compression;
+
+                                        runOnUiThread(() -> {
+                                            TextView textView = (TextView) findViewById(R.id.text_view);
+                                            propertyStr = "File name : " + p.fileName + "\n";
+                                            propertyStr += "File size : " + p.fileSize + "\n";
+                                            propertyStr += "Width : " + p.width + "\n" + "Height : " + p.height + "\n";
+                                            propertyStr += "MCU Width : " + p.MCU_Width + "\n" + "MCU Height : " + p.MCU_Height + "\n";
+                                            propertyStr += "Color space : " + p.Color_space + "\n";
+                                            propertyStr += "EXIF Orientation : " + getOrientationString(finalOrientation) + "\n";
+                                            propertyStr += "EXIF Thumbnail : " + (finalHasThumbnail ? "Yes" : "No") + "\n";
+                                            propertyStr += "Compression : " + (finalCompression == 1 ? "Uncompressed" : finalCompression == 7 ? "JPEG" : "Other (" + finalCompression + ")") + "\n";
+                                            textView.setText(propertyStr);
+                                        });
+                                    } catch (Exception e) {
+                                        runOnUiThread(() -> {
+                                            Toast.makeText(MainActivity.this, "Failed to get properties: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                        });
+                                    }
+                                }).start();
                             }
                         }
                     }
@@ -433,6 +462,29 @@ public class MainActivity extends AppCompatActivity {
         }
         super.onDestroy();
 
+    }
+
+    private String getOrientationString(int orientation) {
+        switch (orientation) {
+            case 1:
+                return "Normal (1)";
+            case 2:
+                return "Flip Horizontal (2)";
+            case 3:
+                return "Rotate 180 (3)";
+            case 4:
+                return "Flip Vertical (4)";
+            case 5:
+                return "Transpose (5)";
+            case 6:
+                return "Rotate 90 CW (6)";
+            case 7:
+                return "Transverse (7)";
+            case 8:
+                return "Rotate 270 CW (8)";
+            default:
+                return "Undefined (" + orientation + ")";
+        }
     }
 
 }
