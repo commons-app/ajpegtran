@@ -315,80 +315,56 @@ do_pixelize (j_decompress_ptr srcinfo,
 
 
 LOCAL(void)
-do_pixelize2(j_decompress_ptr srcinfo,
-             JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
-             jvirt_barray_ptr *src_coef_arrays,
-             JDIMENSION drop_width, JDIMENSION drop_height,
-             JDIMENSION pix_blk_ratio_x, JDIMENSION pix_blk_ratio_y,
-             boolean blk_align) {
-    JDIMENSION x_wipe_blocks, wipe_width;
-    JDIMENSION y_wipe_blocks, wipe_bottom;
-    int ci, offset_y, offset_x;
-    JBLOCKARRAY buffer;
-    jpeg_component_info *compptr;
-    int mcu_ratio_x, mcu_ratio_y;
-    int mcu_blk_x, mcu_blk_y;
-    mcu_ratio_x = pix_blk_ratio_x;
-    mcu_ratio_y = pix_blk_ratio_y;
-    for (ci = 0; ci < srcinfo->num_components; ci++) {
-        compptr = srcinfo->comp_info + ci;
-        x_wipe_blocks = x_crop_offset * compptr->h_samp_factor;
-        wipe_width = drop_width * compptr->h_samp_factor;
-        y_wipe_blocks = y_crop_offset * compptr->v_samp_factor;
-        wipe_bottom = drop_height * compptr->v_samp_factor + y_wipe_blocks;
-        mcu_blk_x = compptr->h_samp_factor * mcu_ratio_x;
-        mcu_blk_y = compptr->v_samp_factor * mcu_ratio_y;
-        JDIMENSION wipe_height = drop_height * compptr->v_samp_factor;
-        int step_x = mcu_blk_x, step_y = mcu_blk_y;
-        int start_x = 0, start_y = 0;
-        if (blk_align) {
-            /* Block Align mode */
-            start_y = y_wipe_blocks % mcu_blk_y;
-            step_y = mcu_blk_y - start_y;
-        }
-        for (offset_y = 0; offset_y < wipe_height; offset_y += step_y) {
-            if (offset_y) step_y = mcu_blk_y;
-            if (blk_align) {
-                /* Block Align mode */
-                start_x = x_wipe_blocks % mcu_blk_x;
-                step_x = mcu_blk_x - start_x;
-            }
-            for (offset_x = x_wipe_blocks;
-                 offset_x < x_wipe_blocks + wipe_width; offset_x += step_x) {
-                int ave = 0, num = 0;
-                if (offset_x > x_wipe_blocks) step_x = mcu_blk_x;
-                for (int local_y = 0;
-                     local_y < step_y && offset_y + local_y < wipe_height; local_y++) {
-                    buffer = (*srcinfo->mem->access_virt_barray)
-                            ((j_common_ptr) srcinfo, src_coef_arrays[ci],
-                             y_wipe_blocks + offset_y + local_y,
-                             (JDIMENSION) 1, TRUE);
-                    for (int local_x = 0; local_x < step_x && offset_x + local_x < x_wipe_blocks +
-                                                                                   wipe_width; local_x++) {
-                        JCOEF *blktop = buffer[0][offset_x + local_x];
-                        ave += blktop[0];
-                        num++;
-                        FMEMZERO(blktop + 1, (DCTSIZE2 - 1) * SIZEOF(JCOEF));
-                    }
-                }
-                ave /= num;
-                for (int local_y = 0;
-                     local_y < step_y && offset_y + local_y < wipe_height; local_y++) {
-                    buffer = (*srcinfo->mem->access_virt_barray)
-                            ((j_common_ptr) srcinfo, src_coef_arrays[ci],
-                             y_wipe_blocks + offset_y + local_y,
-                             (JDIMENSION) 1, TRUE);
-                    for (int local_x = 0; local_x < step_x && offset_x + local_x < x_wipe_blocks +
-                                                                                   wipe_width; local_x++) {
-                        buffer[0][offset_x + local_x][0] = ave;
-                    }
-                }
-                start_x = 0;
-            }
-            start_y = 0;
-        }
+do_pixelize_region_average(j_decompress_ptr srcinfo,
+                           JDIMENSION x_crop_offset, JDIMENSION y_crop_offset,
+                           jvirt_barray_ptr *src_coef_arrays,
+                           JDIMENSION drop_width, JDIMENSION drop_height)
+{
+  int ci;
+  JBLOCKARRAY buffer;
+  jpeg_component_info *compptr;
+
+  for (ci = 0; ci < srcinfo->num_components; ci++) {
+    compptr = srcinfo->comp_info + ci;
+    JDIMENSION x_wipe_blocks = x_crop_offset * compptr->h_samp_factor;
+    JDIMENSION wipe_width = drop_width * compptr->h_samp_factor;
+    JDIMENSION y_wipe_blocks = y_crop_offset * compptr->v_samp_factor;
+    JDIMENSION wipe_height = drop_height * compptr->v_samp_factor;
+    
+    long long ave = 0;
+    long num = 0;
+    
+    /* Pass 1: Accumulate DC and zero AC */
+    for (JDIMENSION offset_y = 0; offset_y < wipe_height; offset_y++) {
+      buffer = (*srcinfo->mem->access_virt_barray)
+        ((j_common_ptr) srcinfo, src_coef_arrays[ci],
+         y_wipe_blocks + offset_y,
+         (JDIMENSION) 1, TRUE);
+      for (JDIMENSION offset_x = 0; offset_x < wipe_width; offset_x++) {
+        JCOEF *blktop = buffer[0][x_wipe_blocks + offset_x];
+        ave += blktop[0];
+        num++;
+        FMEMZERO(blktop + 1, (DCTSIZE2 - 1) * SIZEOF(JCOEF));
+      }
     }
+    
+    if (num > 0) {
+      ave /= num;
+    }
+    
+    /* Pass 2: Set DC to average */
+    for (JDIMENSION offset_y = 0; offset_y < wipe_height; offset_y++) {
+      buffer = (*srcinfo->mem->access_virt_barray)
+        ((j_common_ptr) srcinfo, src_coef_arrays[ci],
+         y_wipe_blocks + offset_y,
+         (JDIMENSION) 1, TRUE);
+      for (JDIMENSION offset_x = 0; offset_x < wipe_width; offset_x++) {
+        buffer[0][x_wipe_blocks + offset_x][0] = (JCOEF) ave;
+      }
+    }
+  }
 }
+
 
 
 LOCAL(void)
@@ -2037,13 +2013,7 @@ jtransform_prepare_pixelize(j_decompress_ptr srcinfo,
                     srcinfo->max_v_samp_factor * srcinfo->min_DCT_v_scaled_size;
         }
     }
-    if (srcinfo->max_h_samp_factor * info->pix_blk_ratio_x *
-        srcinfo->max_v_samp_factor * info->pix_blk_ratio_y
-        > 65536 ||
-        info->pix_blk_ratio_x > 256 ||
-        info->pix_blk_ratio_y > 256) {
-        ERREXIT(srcinfo, JERR_BAD_CROP_SPEC);
-    }
+
     {
         /* Insert default values for unset crop parameters */
         if (info->pix_xoffset_set == JCROP_UNSET)
@@ -2314,11 +2284,9 @@ GLOBAL(void)
 jtransform_execute_pixelize(j_decompress_ptr srcinfo,
                             jvirt_barray_ptr *src_coef_arrays,
                             jpeg_pixelize_info *info) {
-    if (info->pix_blk_ratio_x) {
-        do_pixelize2(srcinfo, info->x_crop_offset, info->y_crop_offset,
-                     src_coef_arrays, info->drop_width, info->drop_height,
-                     info->pix_blk_ratio_x, info->pix_blk_ratio_y,
-                     info->blk_align);
+    if (info->pix_blk_ratio_x == (JDIMENSION)-1) {
+        do_pixelize_region_average(srcinfo, info->x_crop_offset, info->y_crop_offset,
+                                   src_coef_arrays, info->drop_width, info->drop_height);
     } else {
         do_pixelize(srcinfo, info->x_crop_offset, info->y_crop_offset,
                     src_coef_arrays, info->drop_width, info->drop_height);

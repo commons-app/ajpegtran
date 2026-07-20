@@ -51,5 +51,5 @@ class BlurRegion
          * @return `true` if width/height are positive and cornerX/cornerY
          * are non-negative
          */
-        get() = width > 0 && height > 0 && cornerX >= 0 && cornerY >= 0 && blockWidth > 0 && blockHeight > 0
+        get() = width > 0 && height > 0 && cornerX >= 0 && cornerY >= 0 && (blockWidth > 0 || blockWidth == -1) && (blockHeight > 0 || blockHeight == -1)
 }
