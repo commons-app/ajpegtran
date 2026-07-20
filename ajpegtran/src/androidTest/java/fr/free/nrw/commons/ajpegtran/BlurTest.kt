@@ -190,4 +190,30 @@ class BlurTest {
 
     }
 
+    @Test
+    fun testBlurRegionAverage() {
+        val jpegtran = Jpegtran(context, sourceUri)
+
+        val region = BlurRegion(
+            width = 64,
+            height = 64,
+            cornerX = 16,
+            cornerY = 16,
+            blockWidth = -1,
+            blockHeight = -1,
+            aligned = true
+        )
+
+        val blurredFile = jpegtran.blur(listOf(region))
+        assertTrue("Blurred file should exist", blurredFile.exists())
+        assertTrue("Blurred file should not be empty", blurredFile.length() > 0)
+
+        val blurredBitmap = BitmapFactory.decodeFile(blurredFile.absolutePath)
+        assertNotNull("Blurred image should be decodable", blurredBitmap)
+
+        jpegtran.cleanup()
+        val cacheFiles = context.cacheDir.listFiles() ?: emptyArray()
+        val tempFiles = cacheFiles.filter { it.name.startsWith("jpegtran") }
+        assertTrue("clean up temp files", tempFiles.isEmpty())
+    }
 }
