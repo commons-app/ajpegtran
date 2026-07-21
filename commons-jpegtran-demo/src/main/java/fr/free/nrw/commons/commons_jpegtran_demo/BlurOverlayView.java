@@ -345,7 +345,7 @@ public class BlurOverlayView extends View {
             int h = Math.min(imageHeight - cornerY, (int) ((screen.bottom - screen.top) / sy));
 
             if (w > 0 && h > 0) {
-                mappedRegions.add(new BlurRegion(w, h, cornerX, cornerY, 100, 100, true));
+                mappedRegions.add(new BlurRegion(w, h, cornerX, cornerY, -1, -1, true));
             }
         }
         return mappedRegions;

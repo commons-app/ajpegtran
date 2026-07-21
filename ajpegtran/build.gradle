@@ -39,7 +39,7 @@ android {
 
 mavenPublishing {
 
-    coordinates("io.github.commons-app", "ajpegtran", "0.1.9")
+    coordinates("io.github.commons-app", "ajpegtran", "0.1.12")
 
     pom {
         name = "Ajpegtran"
