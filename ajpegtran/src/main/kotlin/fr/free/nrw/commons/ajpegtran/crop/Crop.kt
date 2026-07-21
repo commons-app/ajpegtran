@@ -81,9 +81,7 @@ class Crop internal constructor(
     }
 
     override fun transform() {
-        val result = JpegtranNative.runOnJniThread {
-            JpegtranNative.nativeCrop(rFd, wFd, alignedX, alignedY, alignedWidth, alignedHeight)
-        }
+        val result = JpegtranNative.nativeCrop(rFd, wFd, alignedX, alignedY, alignedWidth, alignedHeight)
         if (result == null || !result.startsWith("OK")) {
             throw RuntimeException("Native crop failed: $result")
         }
