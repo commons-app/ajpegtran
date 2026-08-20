@@ -34,13 +34,14 @@ class Jpegtran(
      * Rotates the current JPEG image state by the given angle.
      *
      * @param rotation rotation angle [RotationDegree]
+     * @param trim if true, trims any partial edge of the image MCU, Defaults to false.
      * @return the output [File] containing the rotated JPEG
      * @throws RuntimeException if the native rotate operation fails
      */
-    fun rotate(rotation: RotationDegree): File {
+    fun rotate(rotation: RotationDegree, trim: Boolean = false): File {
         val outputFile = getTempFile()
         try {
-            val rotate = Rotate(context, currentInputUri, Uri.fromFile(outputFile), rotation.degrees)
+            val rotate = Rotate(context, currentInputUri, Uri.fromFile(outputFile), rotation.degrees, trim)
             rotate.apply()
             currentInputUri = Uri.fromFile(outputFile)
         } catch (e: Exception) {

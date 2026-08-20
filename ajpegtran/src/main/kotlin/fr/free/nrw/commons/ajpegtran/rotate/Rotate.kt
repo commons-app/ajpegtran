@@ -9,11 +9,12 @@ class Rotate internal constructor(
     context: Context,
     inputUri: Uri,
     outputUri: Uri,
-    private val rotation: Int
+    private val rotation: Int,
+    private val trim: Boolean
 ) : Transform(context, inputUri, outputUri) {
 
     override fun transform() {
-        val result = JpegtranNative.nativeRotate(rFd, wFd, rotation)
+        val result = JpegtranNative.nativeRotate(rFd, wFd, rotation, trim)
         if (result == null || !result.startsWith("OK")) {
             throw RuntimeException("Native rotate failed: $result")
         }

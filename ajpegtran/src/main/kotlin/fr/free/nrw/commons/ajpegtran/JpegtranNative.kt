@@ -30,7 +30,7 @@ internal object JpegtranNative {
     ): String?
 
     @JvmStatic
-    external fun nativeRotate(rfd: Int, wfd: Int, degrees: Int): String?
+    external fun nativeRotate(rfd: Int, wfd: Int, degrees: Int, trim: Boolean): String?
 
     @JvmStatic
     external fun nativePixelize(rfd: Int, wfd: Int, regions: IntArray?): String?
