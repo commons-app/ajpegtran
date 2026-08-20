@@ -926,7 +926,7 @@ JNIEXPORT jstring JNICALL
 Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeRotate(
         JNIEnv* env, jobject thiz,
         jint rfd, jint wfd,
-        jint degrees
+        jint degrees, jboolean trim
         )
 {
     /* Initialize variables */
@@ -940,8 +940,8 @@ Java_fr_free_nrw_commons_ajpegtran_JpegtranNative_nativeRotate(
     memset(&transformoption, 0, sizeof(transformoption));
 
     // For Images which are not perfect, Have incomplete block on either edge,
-    // Trims to make it perfect block   .
-    transformoption.trim = TRUE;
+    // Trims to make it perfect block when trim is requested by the consumer.
+    transformoption.trim = (trim == JNI_TRUE) ? TRUE : FALSE;
     switch (degrees) {
         case 90:  transformoption.transform = JXFORM_ROT_90;  break;
         case 180: transformoption.transform = JXFORM_ROT_180; break;
