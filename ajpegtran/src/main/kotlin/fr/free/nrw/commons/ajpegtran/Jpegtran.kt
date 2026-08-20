@@ -35,6 +35,10 @@ class Jpegtran(
      *
      * @param rotation rotation angle [RotationDegree]
      * @param trim if true, trims any partial edge of the image MCU, Defaults to false.
+     * If imperfect images are passed with [trim] set to true it trims the image to perfect and apply transformation.
+     * If imperfect images are passed without the [trim] option then whole image is rotated losslessly,
+     * Except the partial edge MCU blocks gets a partial lossy transform.
+     *
      * @return the output [File] containing the rotated JPEG
      * @throws RuntimeException if the native rotate operation fails
      */
